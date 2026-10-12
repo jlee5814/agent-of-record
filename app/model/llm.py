@@ -225,6 +225,11 @@ class SGLangLLM:
                     if ch.get("finish_reason"):
                         finish = ch["finish_reason"]
         end = time.perf_counter()
+        if finish == "abort":
+            # SGLang aborts a request it can't serve (most often a prompt longer than the token pool)
+            # and still answers 200. Treat it as a server error, not as unparseable model output.
+            raise ServerError(503, "request aborted by the server; check its log (a prompt longer than "
+                                   "--max-total-tokens is the usual cause)")
         out_tokens = usage.get("completion_tokens") or pieces
         decode_s = end - first if first else 0.0
         tps = (out_tokens - 1) / decode_s if decode_s > 0 and out_tokens > 1 else 0.0

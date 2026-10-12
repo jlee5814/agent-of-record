@@ -237,3 +237,11 @@ def test_an_invented_wait_time_from_the_model_is_replaced():
     a.opening(s)
     r = a.handle(s, "hi")
     assert r.trace["reply_source"] == "template_guard" and "in 5 minutes" not in r.reply and "35" in r.reply
+
+
+def test_a_server_abort_is_an_error_not_a_parse_failure():
+    """Found live on MLX: a prompt longer than the token pool came back 200 with finish_reason abort."""
+    llm, _ = client(lambda b, n: (200, sse("", finish="abort")))
+    with pytest.raises(ServerError) as e:
+        llm.extract(X_SYSTEM, "hi", SCHEMA)
+    assert e.value.status == 503 and "max-total-tokens" in e.value.message

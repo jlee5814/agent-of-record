@@ -28,6 +28,17 @@ QUESTION_START = re.compile(r"^(what|who|whom|where|when|how|why|tell me|write|e
                             r"give me|recommend|define)\b", re.I)
 
 
+MONTHS = "january|february|march|april|may|june|july|august|september|october|november|december"
+IDENTITY = {
+    "email": re.compile(r"([\w.+-]+@[\w-]+\.[\w.]+)"),
+    "dob": re.compile(r"\b((?:19|20)\d{2}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/(?:19|20)\d{2}|"
+                      rf"(?:{MONTHS})\s+\d{{1,2}}(?:st|nd|rd|th)?,?\s+(?:19|20)\d{{2}})\b", re.I),
+    "id_last4": re.compile(r"(?:cdl|member id|insurance id|insurance|custodian account|card|last\s*(?:four|4)"
+                           r"(?:\s*digits)?|ends? in|ending(?:\s+in)?)[^0-9]{0,25}(\d{4})\b", re.I),
+    "phone": re.compile(r"(\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4})\b"),
+}
+
+
 @dataclass
 class Signals:
     emergency: bool = False
@@ -38,6 +49,7 @@ class Signals:
     rep_name: Optional[str] = None
     relationship: Optional[str] = None
     holder_name: Optional[str] = None
+    identity: dict = None
 
 
 def read(text: str, phase: str, domain: Domain) -> Signals:
@@ -51,6 +63,7 @@ def read(text: str, phase: str, domain: Domain) -> Signals:
         sig.done = bool(DONE.search(tl)) or (phase == "PROCESS_CASE" and bool(BARE_NO.match(tl)))
     if phase == "POST_PROCESS":
         sig.email_choice = "skip" if SKIP.search(tl) else "send" if SEND.search(tl) else None
+    sig.identity = {f: m.group(1) for f, rx in IDENTITY.items() if (m := rx.search(t))}
     in_scope = re.search(rf"\b({COMMON_SCOPE}|{domain.in_scope_words})\b", tl)
     sig.off_topic = not in_scope and ("?" in t or bool(QUESTION_START.match(tl)))
     return sig

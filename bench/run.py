@@ -30,6 +30,11 @@ from app.core.summary import Outbox  # noqa: E402
 from bench.scenarios import SCENARIOS, Scenario  # noqa: E402
 
 
+# Event kinds that mark code correcting or backing up the model.
+CORRECTIONS = ("identity_not_typed", "hints_from_text", "signals_from_text", "guard_blocked", "empty_model_reply",
+               "extract_parse_failed")
+
+
 @dataclass
 class Rollout:
     label: str
@@ -40,6 +45,7 @@ class Rollout:
     turns: list[dict] = field(default_factory=list)
     error: str | None = None
     wall_ms: float = 0.0
+    corrections: dict = field(default_factory=dict)    # times code corrected or backed up the model
 
 
 def run_one(llm_factory, domain: str, label: str, sc: Scenario, rep: int, outbox_dir: Path) -> Rollout:
@@ -60,6 +66,9 @@ def run_one(llm_factory, domain: str, label: str, sc: Scenario, rep: int, outbox
                              "caller": text[:300], "reply": r.reply[:1200]})
             ro.guard_blocks += bool(r.trace["guard"])
         ro.checks = {name: bool(fn(s, replies)) for name, fn in sc.checks.items()}
+        for e in s.events:
+            if e.kind in CORRECTIONS:
+                ro.corrections[e.kind] = ro.corrections.get(e.kind, 0) + 1
     except Exception as e:  # a failed rollout is data, not a crash
         ro.error = f"{type(e).__name__}: {e}"[:300]
         ro.checks = {name: False for name in sc.checks}
@@ -116,6 +125,7 @@ def summarize(label: str, rollouts: list[Rollout], wall_s: float) -> dict:
         "tokens_per_conversation": {"input": round(tin / n), "output": round(sum(c["output_tokens"] for c in calls) / n)},
         "prefix_cache_hit_share": round(cached / max(tin, 1), 3),
         "throughput_conversations_per_min": round(len(rollouts) / max(wall_s, 1e-9) * 60, 1),
+        "corrections": {k: sum(r.corrections.get(k, 0) for r in rollouts) for k in CORRECTIONS},
         "failed_checks": sorted({f"{r.scenario}:{k}" for r in completed for k, v in r.checks.items() if not v}),
         "error_samples": [r.error for r in rollouts if r.error][:3],
     }
@@ -134,7 +144,8 @@ def to_markdown(results: list[dict]) -> str:
                     f"{L['respond']['p50']:.0f} | {r['ttft_ms']['respond']['p50']:.0f} | "
                     f"{r['decode_tps']['respond']['p50']:.1f} | {r['prefix_cache_hit_share']:.0%} | "
                     f"{r['throughput_conversations_per_min']} |")
-    notes = "\n".join(f"- **{r['label']}** extraction modes {r['extract_modes']}; failed: "
+    notes = "\n".join(f"- **{r['label']}** extraction modes {r['extract_modes']}; code corrections "
+                      f"{ {k: v for k, v in r['corrections'].items() if v} }; failed: "
                       f"{', '.join(r['failed_checks']) or 'none'}" for r in results)
     return head + "\n".join(rows) + "\n\n" + notes + "\n"
 

@@ -11,7 +11,7 @@ from typing import Optional
 
 from ..config import Settings, settings as default_settings
 from . import signals
-from .data import norm_account, norm_dob, norm_email, norm_last4, norm_phone, same_person
+from .data import norm_account, norm_dob, norm_email, norm_last4, norm_phone, normalize_id, same_person
 from .domain import Domain
 from .extraction import Extraction
 from .records import document_guidance, followup_answer, resolve
@@ -96,9 +96,12 @@ class Procedure:
             for word in (name or "").lower().split():
                 tl = re.sub(rf"\b{re.escape(word)}\b", " ", tl)
         found = self.domain.offline_hints(text, tl, s.phase.value, self.cfg.today())
-        update = {k: found[k] for k in self._EXACT if found.get(k)}
+        update = {k: found[k] for k in self._EXACT
+                  if found.get(k) and normalize_id(found[k], self.domain.id_prefix) !=
+                  normalize_id(getattr(ex, k) or "", self.domain.id_prefix)}
         update.update({k: found[k] for k in self._BACKUP if found.get(k) and not getattr(ex, k)})
-        if found.get("intent") and (ex.intent or "other").startswith(("general", "other")):
+        if found.get("intent") and found["intent"] != ex.intent and \
+                (ex.intent or "other").startswith(("general", "other")):
             update["intent"] = found["intent"]      # a specific phrase beats a generic label
 
         # The model may not invent who someone is: an identity value the caller never typed is dropped.
@@ -123,6 +126,13 @@ class Procedure:
             update.update(rep_name=sig.rep_name, caller_role="representative", full_name=sig.holder_name)
             if sig.relationship and not ex.relationship:
                 update["relationship"] = sig.relationship
+        # Dates, digits, and emails have exact shapes: fill the identity fields the model left empty.
+        for f, v in sig.identity.items():
+            if not getattr(ex, f) and not update.get(f):
+                update[f] = v
+        signal_fields = sorted(k for k in update if k not in self._EXACT + self._BACKUP)
+        if signal_fields:
+            s.log("signals_from_text", fields=signal_fields)
         has_identity = any(getattr(ex, f) for f in (*IDENTITY_FIELDS, "account_number"))
         if sig.off_topic and ex.scope == "in_scope" and not has_identity:
             update["scope"] = "out_of_scope"

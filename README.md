@@ -8,11 +8,15 @@ For every job, I've witnessed two records reconciling while someone waited:
 - patient's appointment against the real queue
 - an investment manager's book against the custodian bank's
 
-So I built an agent that checks every reply against the record before the caller sees it.
+So I built an agent that checks every reply against the record before the caller sees it. A local Qwen3-8B, served by SGLang on Apple Silicon through its MLX backend, reads the caller's words and writes the reply.
 
-A local Qwen3-8B, served by SGLang on Apple Silicon through its MLX backend, reads the caller's words and writes the reply. Code decides everything else: who the caller is, which record they mean, and what may be said. Then a guard reconciles the reply against the record. Every amount, time, and ID must match, or the reply is replaced. The model is the working copy; the record is the book of record.
+Code decides everything else:
 
-The records, the banks, and every person in the data are made up.
+- who the caller is
+- which record they mean
+- what may be said
+
+Then a guard reconciles the reply against the record. Every amount, time, and ID must match, or the reply is replaced. The model is the working copy; the record is the book of record. The records, the banks, and every person in the data are made up.
 
 ## The three desks
 
@@ -22,11 +26,11 @@ The records, the banks, and every person in the data are made up.
 
 **Portfolio.** A client of EP Capital asks why yesterday's value for their trust account doesn't match their Harbor Trust Bank statement. Is my money missing? When will it match?
 
-I picked these because I've worked all three. They look different but share a shape: a private record, money that's easy to promise or misstate by accident, and a status that keeps changing while the person is still asking. Same engine, three domains. A new domain is one Python file and one data folder.
+I picked these because I've worked all three. They look different but share a shape: a private record, money that's easy to promise by accident, and a status that keeps changing while the person is still asking. Same engine, three domains. A new domain is one Python file and one data folder.
 
 ## Why I built it
 
-I wanted to see how far a small local model can go in a job with real rules: verify the caller, never leak a record, never promise money or a time. My answer was to take those rules away from the model. The model proposes; code decides. An 8B model is plenty for reading messy language and writing a polite sentence. It isn't the thing I want guarding someone's pay, their health record, or their retirement account.
+I wanted to see how far a small local model can go in a job with real rules: verify the caller, never leak a record, never promise money or a time. My answer was to take those rules away from the model. The model proposes; code decides. An 8B model is plenty for reading messy language and writing a polite sentence.
 
 ## The split: model and code
 

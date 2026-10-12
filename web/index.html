@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gated-agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#EEF2F5; --sheet:#FFFFFF; --ink:#1B2A41; --muted:#5E6B7D; --rule:#D3DBE3;
+  --approve:#2F7D5B; --approve-bg:#E3F1EA; --block:#B23A3A; --block-bg:#F7E4E4;
+  --manila:#F3E7C2; --manila-ink:#6B5414; --focus:#2A62C9; --agent:#E6ECF2; --user:#1B2A41; --user-ink:#FFFFFF;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#121A26; --sheet:#1A2433; --ink:#E4EAF2; --muted:#93A1B5; --rule:#2C3A4E;
+  --approve:#5DBB8F; --approve-bg:#183428; --block:#E07A7A; --block-bg:#3A1D1F;
+  --manila:#3A321B; --manila-ink:#E9D58F; --focus:#7FA8F0; --agent:#223047; --user:#C9D6E8; --user-ink:#121A26;
+}}
+:root[data-theme="dark"]{
+  --paper:#121A26; --sheet:#1A2433; --ink:#E4EAF2; --muted:#93A1B5; --rule:#2C3A4E;
+  --approve:#5DBB8F; --approve-bg:#183428; --block:#E07A7A; --block-bg:#3A1D1F;
+  --manila:#3A321B; --manila-ink:#E9D58F; --focus:#7FA8F0; --agent:#223047; --user:#C9D6E8; --user-ink:#121A26;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--paper);color:var(--ink);font:15px/1.5 "Public Sans",system-ui,sans-serif;font-variant-numeric:tabular-nums}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.app{display:grid;grid-template-columns:minmax(0,1fr) 400px;grid-template-rows:auto 1fr;height:100vh}
+header{grid-column:1/-1;display:flex;align-items:center;gap:16px;padding:12px 20px;border-bottom:1px solid var(--rule);background:var(--sheet)}
+header h1{font-size:17px;font-weight:700;margin:0;letter-spacing:-.01em}
+header .meta{color:var(--muted);font-size:13px}
+header .sp{flex:1}
+.btn{border:1px solid var(--rule);background:var(--sheet);border-radius:6px;padding:6px 12px;cursor:pointer}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--ink);color:var(--sheet);border-color:var(--ink)}
+/* chat */
+.chat{display:flex;flex-direction:column;min-height:0}
+.log{flex:1;overflow-y:auto;padding:24px 20px;display:flex;flex-direction:column;gap:12px}
+.msg{max-width:680px;padding:10px 14px;border-radius:12px;white-space:pre-wrap;overflow-wrap:anywhere}
+.msg.agent{background:var(--agent);align-self:flex-start;border-bottom-left-radius:3px}
+.msg.user{background:var(--user);color:var(--user-ink);align-self:flex-end;border-bottom-right-radius:3px}
+.msg .tag{display:block;font-size:12px;color:var(--muted);margin-top:4px}
+.msg.user .tag{color:inherit;opacity:.7}
+.msg.err{background:var(--block-bg);color:var(--block);align-self:center;font-size:14px}
+.msg.sys{align-self:center;color:var(--muted);font-size:13px;background:none;padding:2px}
+.tries{display:flex;flex-wrap:wrap;gap:6px;padding:0 20px 8px}
+.tries button{border:1px dashed var(--rule);background:none;border-radius:14px;padding:3px 10px;font-size:13px;color:var(--muted);cursor:pointer}
+.tries button:hover{color:var(--ink);border-color:var(--muted)}
+form.compose{display:flex;gap:8px;padding:12px 20px 18px;border-top:1px solid var(--rule);background:var(--sheet)}
+form.compose textarea{flex:1;resize:none;border:1px solid var(--rule);border-radius:8px;padding:9px 12px;background:var(--paper);min-height:44px;max-height:160px}
+/* panel */
+aside{border-left:1px solid var(--rule);background:var(--sheet);overflow-y:auto;padding:18px 18px 40px}
+aside h2{font-size:13px;font-weight:600;color:var(--muted);margin:22px 0 8px}
+aside h2:first-child{margin-top:0}
+.rail{list-style:none;margin:0;padding:0;position:relative}
+.rail li{position:relative;padding:6px 0 14px 30px;color:var(--muted)}
+.rail li::before{content:"";position:absolute;left:8px;top:13px;bottom:-6px;width:2px;background:var(--rule)}
+.rail li:last-child::before{display:none}
+.rail .dot{position:absolute;left:2px;top:7px;width:14px;height:14px;border-radius:50%;border:2px solid var(--rule);background:var(--sheet)}
+.rail li.done{color:var(--ink)} .rail li.done .dot{background:var(--approve);border-color:var(--approve)}
+.rail li.now{color:var(--ink);font-weight:600} .rail li.now .dot{border-color:var(--ink);background:var(--ink)}
+.rail small{display:block;font-weight:400;color:var(--muted);font-size:13px}
+.exit{margin-top:4px;padding:8px 10px;border-radius:6px;font-size:14px;display:none}
+.exit.show{display:block}
+.exit.handoff{background:var(--block-bg);color:var(--block)}
+.exit.ended{background:var(--approve-bg);color:var(--approve)}
+.gate{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;border:1px solid var(--rule)}
+.gate.locked{background:var(--block-bg);border-color:transparent}
+.gate.open{background:var(--approve-bg);border-color:transparent}
+.gate b{font-size:14px}
+.gate .ic{font-size:18px;line-height:1}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:14px;margin:8px 0 0}
+.kv dt{color:var(--muted)} .kv dd{margin:0;overflow-wrap:anywhere}
+.note{background:var(--manila);color:var(--manila-ink);border-radius:4px;padding:10px 12px;font-size:14px}
+.note:empty::before{content:"Nothing remembered yet."}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:13px;padding:2px 8px;border-radius:10px;background:var(--paper);border:1px solid var(--rule)}
+.chip.warn{background:var(--block-bg);color:var(--block);border-color:transparent}
+.flash{animation:flash 1.2s ease-out}
+@keyframes flash{from{box-shadow:0 0 0 3px var(--focus)}to{box-shadow:0 0 0 0 transparent}}
+@media (prefers-reduced-motion:reduce){.flash{animation:none}}
+details{border:1px solid var(--rule);border-radius:6px;margin-top:8px}
+details summary{cursor:pointer;padding:6px 10px;font-size:14px}
+pre{margin:0;padding:8px 10px;font:12px/1.45 "JetBrains Mono",ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto;border-top:1px solid var(--rule)}
+.bars{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--paper);margin:6px 0 4px}
+.bars span{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px;color:var(--muted)}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:0}
+.mail{border:1px solid var(--rule);border-radius:6px;font-size:13px}
+.mail header{display:block;padding:6px 10px;border-bottom:1px solid var(--rule);background:var(--paper)}
+.mail pre{border:0;max-height:300px;font-family:"Public Sans",system-ui,sans-serif;font-size:13px}
+.events{font-size:13px;color:var(--muted);list-style:none;padding:0;margin:0}
+.events li{padding:2px 0;border-bottom:1px dotted var(--rule)}
+.events b{color:var(--ink);font-weight:500}
+dialog{border:1px solid var(--rule);border-radius:10px;background:var(--sheet);color:var(--ink);width:min(440px,92vw);padding:20px}
+dialog::backdrop{background:rgba(10,20,35,.45)}
+dialog label{display:block;font-size:14px;margin:12px 0 4px;color:var(--muted)}
+dialog input,dialog select{width:100%;padding:8px 10px;border:1px solid var(--rule);border-radius:6px;background:var(--paper)}
+dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+.hint{font-size:13px;color:var(--muted);margin:6px 0 0}
+.toggle-panel{display:none} .short{display:none}
+@media (max-width:900px){
+  .app{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  aside{position:fixed;inset:56px 0 0 0;z-index:5;display:none;border-left:0}
+  aside.show{display:block}
+  .toggle-panel{display:inline-block}
+  header .meta{display:none}
+  header{padding:10px 16px;gap:8px}
+  header h1{font-size:15px;white-space:nowrap}
+  .long{display:none} .short{display:inline}
+  .btn{padding:6px 10px}
+  .log,.tries,form.compose{padding-left:16px;padding-right:16px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>gated-agent</h1>
+    <span class="meta" id="meta">Not connected</span>
+    <span class="sp"></span>
+    <button class="btn toggle-panel" id="togglePanel" aria-controls="panel" aria-expanded="false">State</button>
+    <button class="btn" id="openSettings">Settings</button>
+    <button class="btn primary" id="newSession"><span class="long">New conversation</span><span class="short">New</span></button>
+  </header>
+
+  <section class="chat" aria-label="Conversation">
+    <div class="log" id="log" aria-live="polite"></div>
+    <div class="tries" id="tries" aria-label="Example messages"></div>
+    <form class="compose" id="compose">
+      <textarea id="input" rows="1" placeholder="Type as the caller…" aria-label="Message"></textarea>
+      <button class="btn primary" type="submit" id="send">Send</button>
+    </form>
+  </section>
+
+  <aside id="panel" aria-label="SOP state">
+    <h2>Procedure</h2>
+    <ol class="rail" id="rail">
+      <li data-p="VERIFY_ID"><span class="dot"></span>Verify identity<small>Three matching identity details; no dispute data before this</small></li>
+      <li data-p="RESOLVE_INTENT"><span class="dot"></span>Resolve intent<small>Match the caller's words to one of their disputes</small></li>
+      <li data-p="PROCESS_CASE"><span class="dot"></span>Handle dispute<small>Answer from dispute records and guidance only</small></li>
+      <li data-p="POST_PROCESS"><span class="dot"></span>Follow up<small>Offer an email summary, send or skip</small></li>
+    </ol>
+    <div class="exit" id="exit"></div>
+
+    <h2>Disclosure gate</h2>
+    <div class="gate locked" id="gate"><span class="ic" id="gateIc" aria-hidden="true">🔒</span><div><b id="gateTitle">Locked</b><div class="hint" id="gateSub"></div></div></div>
+    <dl class="kv" id="ident"></dl>
+
+    <h2>Remembered from the caller</h2>
+    <div class="note" id="memory"></div>
+
+    <h2>Dispute</h2>
+    <dl class="kv" id="case"></dl>
+
+    <h2>Caller signals</h2>
+    <div class="chips" id="signals"></div>
+
+    <h2>Last turn</h2>
+    <div id="timing"><p class="hint">Send a message to see how the turn was handled.</p></div>
+    <details><summary>Directives and extraction</summary><pre id="trace"></pre></details>
+
+    <h2>Email summary</h2>
+    <div id="mail"><p class="hint">Offered after the dispute is handled. Sent only to the address on file.</p></div>
+
+    <h2>Event log</h2>
+    <ul class="events" id="events"></ul>
+  </aside>
+</div>
+
+<dialog id="settings">
+  <form method="dialog" id="settingsForm">
+    <h3 style="margin:0 0 4px;font-size:17px">Settings</h3>
+    <p class="hint">Changes apply to the next conversation.</p>
+    <label for="provider">Model provider</label>
+    <select id="provider">
+      <option value="sglang">SGLang (local Qwen3)</option>
+      <option value="offline">Offline rules (no server, deterministic)</option>
+    </select>
+    <label for="baseUrl">SGLang base URL</label>
+    <input id="baseUrl" placeholder="http://localhost:30000/v1">
+    <label for="model">Model</label>
+    <input id="model" placeholder="auto (ask the server)">
+    <label for="extractMode">Extraction method</label>
+    <select id="extractMode">
+      <option value="">Try each, keep the first that works</option>
+      <option value="json_schema">Grammar constrained JSON schema</option>
+      <option value="json_object">JSON mode, schema in the prompt</option>
+      <option value="prompt">Prompt only</option>
+    </select>
+    <label for="scenario">Consent scenario for representative callers</label>
+    <select id="scenario"><option value="default">Approves on second check</option><option value="timeout">Never approves</option></select>
+    <div class="row"><button class="btn" value="cancel">Cancel</button><button class="btn primary" value="ok" id="saveSettings">Save and start new</button></div>
+  </form>
+</dialog>
+
+<script>
+const $ = s => document.querySelector(s);
+const PHASES = ["VERIFY_ID","RESOLVE_INTENT","PROCESS_CASE","POST_PROCESS"];
+const TRIES = [
+  ["Laptop never arrived","Hi, this is Daniel Okafor, account ACC-30417. I'm calling about my Bluewater dispute, the laptop never arrived. Date of birth 1979-06-02, card ending 8812."],
+  ["Frustrated caller","I already told you who I am. This is ridiculous. Just tell me what's happening with my dispute."],
+  ["Off topic","What is RL?"],
+  ["Spouse calling","Hi, I'm Grace Okafor, calling for my husband Daniel Okafor. His date of birth is 1979-06-02 and the card ends in 8812."],
+  ["Misspelled name","My name is Lena Hofman, born January 30 1986, email lena.h@example.org"],
+  ["Ambiguous dispute","My name is Daniel Okafor, DOB 1979-06-02, card ending 8812. It's about my Bluewater charge from February."],
+];
+const cfg = {provider:null, model:"", baseUrl:"", extractMode:"", scenario:"default"};
+let sid = null, busy = false, prev = null;
+
+function load(){ try{ Object.assign(cfg, JSON.parse(sessionStorage.getItem("gated-cfg")||"{}")); }catch(e){} }
+function save(){ try{ sessionStorage.setItem("gated-cfg", JSON.stringify(cfg)); }catch(e){} }
+
+function add(role, text, tag){
+  const d = document.createElement("div");
+  d.className = "msg " + role; d.textContent = text;
+  if(tag){ const t = document.createElement("span"); t.className="tag"; t.textContent = tag; d.appendChild(t); }
+  $("#log").appendChild(d); $("#log").scrollTop = $("#log").scrollHeight;
+}
+
+async function api(path, body){
+  const r = await fetch(path, {method: body ? "POST":"GET", headers:{"Content-Type":"application/json"}, body: body ? JSON.stringify(body): undefined});
+  const j = await r.json().catch(()=>({detail:"The server returned an unreadable response."}));
+  if(!r.ok) throw new Error(j.detail || ("Request failed with status " + r.status));
+  return j;
+}
+
+async function start(){
+  $("#log").innerHTML = ""; sid = null; prev = null;
+  try{
+    const j = await api("/api/session", {provider: cfg.provider, model: cfg.model || null, base_url: cfg.baseUrl || null,
+                                         extract_mode: cfg.extractMode || null, consent_scenario: cfg.scenario});
+    sid = j.session_id; add("agent", j.reply); render(j.state);
+  }catch(e){ add("err", e.message + " Open Settings to fix it."); $("#meta").textContent = "Not connected"; }
+}
+
+async function send(text){
+  if(!sid || busy || !text.trim()) return;
+  busy = true; $("#send").disabled = true; add("user", text);
+  const pending = document.createElement("div"); pending.className = "msg sys"; pending.textContent = "Agent is replying…";
+  $("#log").appendChild(pending);
+  try{
+    const j = await api("/api/chat", {session_id: sid, message: text});
+    pending.remove();
+    const t = j.state.last_trace;
+    add("agent", j.reply, t ? `${t.phase_after.replace("_"," ").toLowerCase()} · ${Math.round(t.timing_ms.total)} ms` : "");
+    render(j.state);
+  }catch(e){ pending.remove(); add("err", e.message); }
+  busy = false; $("#send").disabled = false; $("#input").focus();
+}
+
+function flashIf(el, changed){ if(changed){ el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); } }
+
+function dl(el, rows){ el.innerHTML = rows.filter(r => r[1] !== undefined && r[1] !== null && r[1] !== "").map(([k,v]) =>
+  `<dt>${k}</dt><dd>${esc(String(v))}</dd>`).join("") || `<dt>None yet</dt><dd></dd>`; }
+function esc(s){ return s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+function render(s){
+  $("#meta").textContent = `${s.provider} · ${s.model} · extraction ${s.extract_mode.replace("_"," ")} · demo date ${s.today}`;
+  // rail
+  const idx = PHASES.indexOf(s.phase);
+  const terminal = s.phase === "HUMAN_HANDOFF" || s.phase === "ENDED";
+  const lastReal = terminal ? PHASES.indexOf(prev?.phase_real || "VERIFY_ID") : idx;
+  document.querySelectorAll("#rail li").forEach((li,i) => {
+    li.classList.toggle("done", s.phase === "ENDED" ? true : i < lastReal);
+    li.classList.toggle("now", !terminal && i === idx);
+  });
+  const ex = $("#exit");
+  ex.className = "exit" + (terminal ? " show " + (s.phase === "ENDED" ? "ended" : "handoff") : "");
+  ex.textContent = s.phase === "ENDED" ? "Conversation complete." :
+    s.phase === "HUMAN_HANDOFF" ? `Transferred to a person (${(s.signals.handoff_reason||"").replaceAll("_"," ")}).` : "";
+  // gate
+  const g = s.gates, open = g.disclosure_allowed;
+  const gate = $("#gate");
+  gate.className = "gate " + (open ? "open" : "locked");
+  $("#gateIc").textContent = open ? "🔓" : "🔒";
+  $("#gateTitle").textContent = open ? "Open: dispute details may be shared" : "Locked: no dispute details";
+  let sub = `${g.pii_provided} of ${g.pii_required} identity details given · attempt ${g.verify_attempts} of ${g.max_attempts}`;
+  if(s.caller.role === "representative") sub += ` · caller ${s.caller.rep_authorized === false ? "not authorized" : s.caller.rep_authorized ? "authorized" : "unchecked"} · consent ${s.consent.status.replaceAll("_"," ")}`;
+  $("#gateSub").textContent = sub;
+  flashIf(gate, prev && prev.open !== open);
+  dl($("#ident"), [["Caller", s.caller.role === "representative" ? `${s.caller.rep_name||"representative"}${s.caller.relationship? " ("+s.caller.relationship+")":""}` : s.caller.role],
+    ["Name", s.identity.full_name], ["Date of birth", s.identity.dob], ["Phone", s.identity.phone], ["Email", s.identity.email],
+    ["Card last four", s.identity.card_last4], ["Account (lookup only)", s.identity.account_number]]);
+  // memory
+  const m = s.memory, parts = [];
+  if(m.status) parts.push(m.status); if(m.merchant) parts.push(m.merchant); if(m.reason) parts.push(m.reason.replaceAll("_"," "));
+  if(m.month) parts.push("from " + new Date(2000, m.month-1).toLocaleString("en",{month:"long"}));
+  if(m.year) parts.push(m.year); if(m.dispute_id) parts.push(m.dispute_id);
+  const memText = parts.length ? `Dispute hint: ${parts.join(", ")}` + (m.intent ? `. Wants: ${m.intent.replaceAll("_"," ")}.` : ".") : (m.intent ? `Wants: ${m.intent.replaceAll("_"," ")}.` : "");
+  const mem = $("#memory"); mem.textContent = memText;
+  flashIf(mem, prev && prev.mem !== memText && memText);
+  dl($("#case"), [["Selected", s.dispute.selected], ["Candidates", (s.dispute.candidates||[]).join(", ")],
+    ["Discussed", (s.dispute.discussed||[]).join(", ")]]);
+  // signals
+  const sig = s.signals;
+  $("#signals").innerHTML = [
+    `<span class="chip ${sig.emotion!=="neutral"&&sig.emotion!=="positive"?"warn":""}">tone: ${sig.emotion}</span>`,
+    `<span class="chip ${sig.frustration_streak?"warn":""}">frustrated turns: ${sig.frustration_streak}</span>`,
+    `<span class="chip ${sig.off_topic_strikes?"warn":""}">off topic in a row: ${sig.off_topic_strikes}</span>`,
+    sig.handoff_offered ? `<span class="chip warn">human offered</span>` : ""].join("");
+  // timing
+  const t = s.last_trace;
+  if(t){
+    const tm = t.timing_ms, tot = Math.max(tm.total, 1);
+    const seg = [["extract",tm.extract,"#2A62C9"],["control",tm.control,"#2F7D5B"],["respond",tm.respond,"#8A5CC2"],["guard",tm.guard,"#C08A1E"]];
+    const toks = t.calls.reduce((a,c)=>a + c.input_tokens + c.output_tokens, 0);
+    const cached = t.calls.reduce((a,c)=>a + (c.cached_tokens||0), 0);
+    const resp = t.calls.find(c => c.stage === "respond") || {};
+    const speed = resp.ttft_ms ? ` · first token ${Math.round(resp.ttft_ms)} ms · ${Math.round(resp.decode_tps)} tok/s` : "";
+    const cache = cached ? ` · ${cached} cached` : "";
+    $("#timing").innerHTML = `<div class="bars">${seg.map(([n,v,c])=>`<span title="${n} ${v} ms" style="width:${Math.max(v/tot*100, v>0?1:0)}%;background:${c}"></span>`).join("")}</div>
+      <div class="legend">${seg.map(([n,v,c])=>`<span><i style="background:${c}"></i>${n} ${v < 10 ? v.toFixed(1) : Math.round(v)} ms</span>`).join("")}</div>
+      <p class="hint">${Math.round(tm.total)} ms total${speed} · ${toks} tokens${cache} · ${t.reply_source === "template_guard" ? "guard replaced the reply: " + esc(t.guard.join(", "))
+        : t.reply_source === "template_empty_model_reply" ? "model returned no text; template reply used"
+        : t.reply_source === "offline_template" ? "guard passed · offline rules mode, template reply"
+        : "guard passed · reply written by the model"}</p>`;
+    $("#trace").textContent = JSON.stringify({directives: t.directives, extraction: t.extraction, grounded: t.grounded_keys}, null, 1);
+  }
+  // mail
+  const msgs = s.email.messages || [];
+  $("#mail").innerHTML = msgs.length ? msgs.map(mm => `<div class="mail"><header><b>To</b> ${esc(mm.to)}<br><b>Subject</b> ${esc(mm.subject)}</header><pre>${esc(mm.body)}</pre></div>`).join("")
+    : s.email.decision === "skip" ? `<p class="hint">The caller chose to skip the email.</p>` : `<p class="hint">Offered after the dispute is handled. Sent only to the address on file.</p>`;
+  // events
+  $("#events").innerHTML = s.events.slice(-14).reverse().map(e =>
+    `<li><b>${esc(e.kind.replaceAll("_"," "))}</b> ${esc(Object.entries(e.data).filter(([k,v])=>v!==null&&v!==""&&!(Array.isArray(v)&&!v.length)).map(([k,v])=>`${k}=${typeof v==="object"?JSON.stringify(v):v}`).join(" "))}</li>`).join("");
+  prev = {open, mem: memText, phase_real: terminal ? (prev?.phase_real || "VERIFY_ID") : s.phase};
+}
+
+// wiring
+TRIES.forEach(([label, text]) => { const b = document.createElement("button"); b.type="button"; b.textContent = label;
+  b.title = text; b.onclick = () => { $("#input").value = text; $("#input").focus(); }; $("#tries").appendChild(b); });
+$("#compose").addEventListener("submit", e => { e.preventDefault(); const v = $("#input").value; $("#input").value = ""; send(v); });
+$("#input").addEventListener("keydown", e => { if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); $("#compose").requestSubmit(); } });
+$("#newSession").onclick = start;
+$("#togglePanel").onclick = () => { const p = $("#panel"); const on = p.classList.toggle("show"); $("#togglePanel").setAttribute("aria-expanded", on); };
+$("#openSettings").onclick = () => {
+  $("#provider").value = cfg.provider; $("#model").value = cfg.model; $("#extractMode").value = cfg.extractMode;
+  $("#baseUrl").value = cfg.baseUrl; $("#scenario").value = cfg.scenario; $("#settings").showModal(); };
+$("#settingsForm").addEventListener("submit", e => {
+  if(e.submitter && e.submitter.value === "ok"){
+    Object.assign(cfg, {provider: $("#provider").value, model: $("#model").value.trim(), extractMode: $("#extractMode").value,
+                        baseUrl: $("#baseUrl").value.trim(), scenario: $("#scenario").value});
+    save(); start();
+  }
+});
+
+(async () => {
+  load();
+  try{
+    const c = await api("/api/config");
+    if(!cfg.provider) cfg.provider = c.default_provider;
+    $("#baseUrl").placeholder = c.default_base_url;
+  }catch(e){ cfg.provider = cfg.provider || "offline"; }
+  await start();
+  if(!sid && cfg.provider !== "offline"){
+    add("sys", "SGLang isn't reachable, so this chat runs in offline rules mode. Start the server and open Settings to switch back.");
+    cfg.provider = "offline"; start();
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+{
+  "default_guidance": "Upload documents in the Acme Bank app under Disputes, or reply to the dispute email with them attached. Each file should be readable and show the merchant name, the date, and the amount where it applies. If you can't upload, a support agent can arrange mail.",
+  "reason_guidance": {
+    "item_not_received": "For an item that never arrived, the reviewer needs to see what you ordered, when it was due, and that you tried to resolve it with the merchant.",
+    "service_not_provided": "For a service that didn't happen, the reviewer needs to see that it was cancelled or not delivered and that no refund was issued.",
+    "duplicate_charge": "For a duplicate charge, no documents are usually needed. The reviewer compares the two transactions.",
+    "wrong_amount": "For a wrong amount, a receipt or quote showing the price you agreed to helps most.",
+    "fraud": "For an unauthorized charge, the card is replaced and no documents are usually needed."
+  },
+  "document_guidance": {
+    "proof of order or delivery": "An order confirmation or invoice showing the item, the price, the order date, and the promised delivery date. A tracking page is helpful if you have it.",
+    "written merchant correspondence": "Emails or chat messages where you asked the merchant about the problem, with dates visible. Screenshots are fine if the dates and sender show."
+  },
+  "document_alternatives": {
+    "default": "If you don't have the exact document, send what you have with a short note explaining what is missing. A support agent can review other proof if needed.",
+    "proof of order or delivery": "If you can't find the order confirmation, a card statement line plus a screenshot of your account order history on the merchant's site usually works.",
+    "written merchant correspondence": "If you contacted the merchant by phone, write down the date, the time, and what they told you, and send that as a note."
+  },
+  "followup_settings": {
+    "processing_time": "about ten business days",
+    "human_review_rule": "If none of the documents or alternatives are available, a dispute specialist reviews the case by hand."
+  },
+  "followup_rules": [
+    {"topic": "missing_document_alternatives", "requires_documents": true,
+     "match_any": ["don't have", "do not have", "can't find", "cannot find", "lost", "no longer have", "what if i don't"],
+     "text": "If you can't find {documents}, send what you have with a short note on what is missing. A dispute specialist will review other proof for dispute {dispute_id}."},
+    {"topic": "submission_timing", "requires_documents": true,
+     "match_any": ["how soon", "when should", "when do i", "deadline", "by when", "how long do i have"],
+     "text": "For dispute {dispute_id}, please send {documents} before the response deadline. Sending them within the week keeps the review moving."},
+    {"topic": "processing_time", "requires_documents": false,
+     "match_any": ["how long does it take", "how long will it take", "after i send", "when will i hear", "how long until"],
+     "text": "Once we have everything, a decision usually takes {processing_time}."},
+    {"topic": "submission_method", "requires_documents": true,
+     "match_any": ["how do i send", "where do i send", "upload", "the app", "email them", "mail them"],
+     "text": "You can upload {documents} in the Acme Bank app under Disputes, or reply to the dispute email with them attached."},
+    {"topic": "file_format", "requires_documents": true,
+     "match_any": ["screenshot", "photo", "pdf", "format", "picture", "scan"],
+     "text": "Screenshots, photos, and PDFs all work, as long as the merchant name, the date, and the amount are readable."},
+    {"topic": "receipt_confirmation", "requires_documents": true,
+     "match_any": ["confirmation", "know you got", "did you get", "received them"],
+     "text": "You'll get a notification in the app when we receive the documents for dispute {dispute_id}."}
+  ],
+  "followup_fallback": "I don't have a specific answer for that. A dispute specialist can help, or I can tell you what's needed for this dispute."
+}

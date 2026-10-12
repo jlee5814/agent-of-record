@@ -1,0 +1,14 @@
+[
+  {"party_id": "C1", "name": "Daniel Okafor", "name_aliases": [], "account_number": "ACC-30417",
+   "dob": "1979-06-02", "card_last4": "8812", "phone": "+14045550147", "phone_aliases": [],
+   "email": "d.okafor@example.com", "email_aliases": []},
+  {"party_id": "C2", "name": "Priya Raman", "name_aliases": [], "account_number": "ACC-51290",
+   "dob": "1992-11-23", "card_last4": "0436", "phone": "+14045550193", "phone_aliases": [],
+   "email": "priya.raman@example.net", "email_aliases": []},
+  {"party_id": "C3", "name": "Lena Hoffmann", "name_aliases": ["Lena Hofman"], "account_number": "ACC-77802",
+   "dob": "1986-01-30", "card_last4": "5521", "phone": "+14045550148", "phone_aliases": [],
+   "email": "lena.hoffmann@example.org", "email_aliases": ["lena.h@example.org"]},
+  {"party_id": "C4", "name": "Marcus Bell", "name_aliases": [], "account_number": "ACC-12005",
+   "dob": "2000-04-09", "card_last4": "7009", "phone": "+14045550111", "phone_aliases": [],
+   "email": "marcus.bell@example.com", "email_aliases": []}
+]

@@ -14,12 +14,12 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from .config import ROOT, settings
-from .controller import Agent
-from .domain import DOMAINS, get_domain
-from .llm import make_llm
-from .state import IDENTITY_FIELDS, Phase, SessionState
-from .summary import Outbox
-from .verify import FailureRegistry
+from .agent import Agent
+from .core.domain import DOMAINS, get_domain
+from .core.state import IDENTITY_FIELDS, SessionState
+from .core.summary import Outbox
+from .core.verify import FailureRegistry
+from .model.llm import make_llm
 
 app = FastAPI(title="agent-of-record")
 log = logging.getLogger("agent_of_record")

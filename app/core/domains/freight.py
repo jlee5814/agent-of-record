@@ -5,7 +5,7 @@ import re
 from datetime import date, datetime, timedelta
 from typing import Optional
 
-from ..data import Record, clock, long_date, money, usd
+from ..data import Record, clock, long_date, usd
 from ..domain import Domain
 
 DOCK_WORDS = {"waiting_for_door": "waiting for a door", "door_assigned": "door assigned", "loading": "loading",

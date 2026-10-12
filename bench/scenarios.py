@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Callable
 
-from app.state import Phase, SessionState
+from app.core.state import Phase, SessionState
 
 Check = Callable[[SessionState, list[str]], bool]
 

@@ -1,8 +1,14 @@
 # agent-of-record
 
-An agent of record for any system of record.
+An agent for any system of record.
 
-Every job I've had meant reconciling two records while someone waited: a driver's clock against the signed times at the dock, a patient's appointment against the real queue, an investment manager's book against the custodian bank's. So I built an agent that checks every reply against the record before the caller sees it.
+For every job, I've witnessed two records reconciling while someone waited:
+
+- driver's clock against the signed times at the dock
+- patient's appointment against the real queue
+- an investment manager's book against the custodian bank's
+
+So I built an agent that checks every reply against the record before the caller sees it.
 
 A local Qwen3-8B, served by SGLang on Apple Silicon through its MLX backend, reads the caller's words and writes the reply. Code decides everything else: who the caller is, which record they mean, and what may be said. Then a guard reconciles the reply against the record. Every amount, time, and ID must match, or the reply is replaced. The model is the working copy; the record is the book of record.
 
@@ -22,12 +28,26 @@ I picked these because I've worked all three. They look different but share a sh
 
 I wanted to see how far a small local model can go in a job with real rules: verify the caller, never leak a record, never promise money or a time. My answer was to take those rules away from the model. The model proposes; code decides. An 8B model is plenty for reading messy language and writing a polite sentence. It isn't the thing I want guarding someone's pay, their health record, or their retirement account.
 
+## The split: model and code
+
+The code lives in two packages with one seam between them.
+
+| | `app/model/` | `app/core/` |
+|---|---|---|
+| Job | Read the caller's words; write the reply | Decide everything else |
+| Behavior | Probabilistic | Deterministic |
+| Sees | The conversation, then the directives and approved facts | The records, the session, the rules |
+| Can change state | No | Yes, only the procedure |
+| Files | `extract.py`, `reply.py`, `llm.py`, `offline.py` | `procedure.py`, `verify.py`, `guard.py`, `extraction.py`, `records.py`, `templates.py`, domains |
+
+`app/agent.py` is the seam, and the only module that imports both. A test parses every import and fails if core ever imports the model, or if the model imports the code that decides (the procedure, the verifier, the guard). The rule holds in code, not in a prompt.
+
 ## How a turn works
 
-1. **Extract.** Qwen reads the latest message and returns fields: identity details, hints about which record, what the caller wants, tone, and whether it's an emergency. It sees the conversation only, never the records.
-2. **Control.** Plain Python runs the procedure. It is the only code that changes state.
-3. **Respond.** Qwen gets the controller's decisions and the facts it may use, and writes the reply. Before verification, the facts are empty.
-4. **Guard.** Code checks the reply. Before verification, any record number, amount, facility, provider, bank, account name, or record value blocks it. After, any record number, dollar amount, clock time, or number of minutes not in the approved facts (or said by the caller) blocks it. A blocked reply becomes a fixed template, and the trace says so.
+1. **Extract** (model). Qwen reads the latest message and proposes fields: identity details, hints about which record, what the caller wants, tone, and whether it's an emergency. It sees the conversation only, never the records. `core/extraction.py` validates the proposal; a bad field is dropped, never trusted.
+2. **Decide** (code). The procedure runs the gates, picks the record, and emits directives plus the facts the reply may use. It is the only code that changes state.
+3. **Reply** (model). Qwen gets the directives and the approved facts and writes the sentence. Before verification, the facts are empty.
+4. **Guard** (code). Before verification, any record number, amount, facility, provider, bank, account name, or record value blocks the reply. After, any record number, dollar amount, clock time, or number of minutes not in the approved facts (or said by the caller) blocks it. A blocked reply becomes a fixed template from `core/templates.py`, and the trace says so.
 
 ## What code decides, not the model
 
@@ -89,7 +109,7 @@ The report gives pass rate, server errors (kept apart from failures so a timeout
 
 ## Adding a domain
 
-Subclass `Domain` in `app/domains/`, then add a folder under `data/` with people, contacts, records, guidance, and consent scenarios. The class supplies the words (what a record is called, who a handoff goes to), the allowed values for extraction, how a record becomes sentences, and a few regexes for offline mode. The procedure, the gates, and the guard don't change.
+Subclass `Domain` in `app/core/domains/`, then add a folder under `data/` with people, contacts, records, guidance, and consent scenarios. The class supplies the words (what a record is called, who a handoff goes to), the allowed values for extraction, how a record becomes sentences, and a few regexes for offline mode. The procedure, the gates, and the guard don't change.
 
 ## Tests
 
@@ -97,7 +117,7 @@ Subclass `Domain` in `app/domains/`, then add a folder under `data/` with people
 pytest
 ```
 
-155 tests, no server needed. Gate tests run in every domain. A mock transport plays SGLang, so the tests pin the request shape, the extraction fallbacks, stray think tags, cache hit reporting, and full turns where the model invents a wait time and the guard replaces it.
+159 tests, no server needed. Gate tests run in every domain, and a boundary test keeps the model and the code apart. A mock transport plays SGLang, so the tests pin the request shape, the extraction fallbacks, stray think tags, cache hit reporting, and full turns where the model invents a wait time and the guard replaces it.
 
 ## Tradeoffs
 
@@ -110,17 +130,23 @@ pytest
 
 ```
 app/
-  controller.py   the procedure: extract, control, respond, guard
-  domain.py       what a domain supplies, and the registry
-  domains/        freight.py, clinic.py, portfolio.py
-  verify.py       identity matching, lockout, consent
-  records.py      record lookup and document guidance
-  extract.py      extraction schema and prompt, built per domain
-  respond.py      reply prompt, templates, guard
-  llm.py          SGLang provider: streaming, fallbacks, metrics
-  offline.py      regex extraction for tests and the demo without a server
-data/             synthetic fixtures, one folder per domain
-bench/            scenarios and the runner
+  agent.py          the seam: extract, decide, reply, guard
+  core/             deterministic
+    procedure.py    the gates and the state machine; the only state writer
+    verify.py       identity matching, lockout, consent
+    extraction.py   the contract: fields the model may propose, and their validation
+    records.py      record lookup and document guidance
+    guard.py        reconciles each reply against the record
+    templates.py    fixed wording for every directive
+    domain.py       what a domain supplies, and the registry
+    domains/        freight.py, clinic.py, portfolio.py
+  model/            probabilistic
+    extract.py      the extraction prompt
+    reply.py        the reply prompt
+    llm.py          SGLang provider: streaming, fallbacks, metrics
+    offline.py      a regex stand in for the model, for tests and the demo
+data/               synthetic fixtures, one folder per domain
+bench/              scenarios and the runner
 tests/
-web/index.html    chat page and state panel
+web/index.html      chat page and state panel
 ```

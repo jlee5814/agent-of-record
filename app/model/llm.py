@@ -299,6 +299,6 @@ def make_llm(provider: str, model: str = "auto", base_url: Optional[str] = None,
         from .offline import OfflineLLM
         return OfflineLLM()
     if provider in ("sglang", "openai-compat"):
-        from .config import settings
+        from ..config import settings
         return SGLangLLM(base_url or settings.base_url, model, api_key, extract_mode, thinking)
     raise ValueError(f"unknown provider {provider!r}; use sglang or offline")

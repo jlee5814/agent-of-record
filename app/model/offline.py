@@ -1,7 +1,8 @@
-"""Offline provider: regex extraction and template replies.
+"""A stand-in for the model: regex extraction and template replies.
 
-It runs the tests and the keyless demo. It's deliberately simple: its job is
-to exercise the controller without a network, not to compete with a model.
+It fills the model's seat in the tests and the demo without a server. It's
+deliberately simple: its job is to exercise the procedure, not to compete
+with a model.
 """
 from __future__ import annotations
 
@@ -128,7 +129,7 @@ class OfflineLLM:
         self.domain_key = domain
 
     def _domain(self, system: str):
-        from .domain import DOMAINS, get_domain
+        from ..core.domain import DOMAINS, get_domain
         if self.domain_key:
             return get_domain(self.domain_key)
         # No domain given: the extraction prompt names the organization.
@@ -145,7 +146,7 @@ class OfflineLLM:
         return LLMResult(value, CallStats("extract", "offline", (time.perf_counter() - t0) * 1000, mode="rules"))
 
     def generate(self, system: str, user: str, max_tokens: int = 400) -> LLMResult:
-        from .respond import render_template
+        from ..core.templates import render_template
         t0 = time.perf_counter()
         payload = json.loads(user.split("PAYLOAD_JSON:\n", 1)[1])
         text = render_template(payload)

@@ -11,7 +11,7 @@ from datetime import date
 from pathlib import Path
 from typing import Optional
 
-from .config import settings
+from ..config import settings
 from .domain import Domain
 from .records import document_guidance
 from .state import SessionState

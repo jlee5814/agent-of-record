@@ -1,29 +1,25 @@
-"""The procedure. Each turn runs extract, control, respond, and guard.
+"""Step 2: the procedure. Deterministic Python, the only code that changes state.
 
-Only this module changes session state or phase during a turn. The model
-proposes fields and words the reply; code decides everything else.
+It reads the validated extraction, runs the gates (identity, consent,
+lockout), resolves which record the caller means, and emits directives plus
+the facts the reply may use. No model is called here.
 """
 from __future__ import annotations
 
-import re
-import time
-from dataclasses import asdict, dataclass, field
 from typing import Optional
 
-from . import extract as X
-from . import respond as R
-from .config import Settings, settings as default_settings
+from ..config import Settings, settings as default_settings
 from .data import norm_account, norm_dob, norm_email, norm_last4, norm_phone, same_person
-from .domain import Domain, get_domain
+from .domain import Domain
+from .extraction import Extraction
 from .records import document_guidance, followup_answer, resolve
-from .llm import CallStats
 from .state import HINT_FIELDS, IDENTITY_FIELDS, ConsentState, Identity, IntentMemory, Phase, SessionState
 from .summary import Outbox, build_summary
+from .templates import mask_email
 from .verify import FailureRegistry, poll_consent, rep_authorized, verify
 
 NEGATIVE = {"frustrated", "angry", "anxious", "confused", "refusing"}
 ESCALATING = {"frustrated", "angry"}
-PII_FIELDS = ("full_name", "dob", "phone", "email", "id_last4", "account_number")
 
 
 def _same_value(field: str, new: str, old: Optional[str]) -> bool:
@@ -45,127 +41,24 @@ def _same_value(field: str, new: str, old: Optional[str]) -> bool:
     return new == old
 
 
-def mask_pii(d: dict) -> dict:
-    """Replace identity values with their length for traces and the panel.
-
-    Free text fields, like the restated question, can quote the caller's
-    details too, so those values and any long digit runs are scrubbed there.
-    """
-    secrets = [str(d[k]) for k in PII_FIELDS if d.get(k)]
-    out = {}
-    for k, v in d.items():
-        if k in PII_FIELDS and v:
-            out[k] = f"<{len(str(v))} chars>"
-        elif isinstance(v, str):
-            for sec in secrets:
-                v = v.replace(sec, "***")
-            out[k] = re.sub(r"\d[\d/.-]{3,}\d", "***", v)
-        else:
-            out[k] = v
-    return out
-
-
-@dataclass
-class TurnResult:
-    reply: str
-    state: SessionState
-    trace: dict = field(default_factory=dict)
-
-
-class Agent:
-    def __init__(self, llm, domain: Domain | str = "freight", cfg: Settings = default_settings,
-                 outbox: Optional[Outbox] = None, failures: Optional[FailureRegistry] = None):
-        self.llm = llm
-        self.domain = get_domain(domain) if isinstance(domain, str) else domain
-        self.store = self.domain.store
+class Procedure:
+    def __init__(self, domain: Domain, cfg: Settings = default_settings, outbox: Optional[Outbox] = None,
+                 failures: Optional[FailureRegistry] = None):
+        self.domain = domain
+        self.store = domain.store
         self.cfg = cfg
         self.outbox = outbox or Outbox()
         # Share one registry across sessions (the server does) so lockouts survive a new chat.
         self.failures = failures or FailureRegistry(cfg.max_party_failures, cfg.lockout_window_min * 60)
 
-    # ------------------------------------------------------------ public
+    def run(self, s: SessionState, ex: Extraction, utterance: str) -> tuple[list[dict], Optional[dict]]:
+        """Apply one turn. Returns the directives and the facts the reply may use (None before verification)."""
+        out: list[dict] = []
+        ctx = {"grounded": None, "utterance": utterance}
+        self._control(s, ex, out, ctx)
+        return out, (ctx["grounded"] if s.verified else None)
 
-    def opening(self, state: SessionState) -> str:
-        if not state.transcript:
-            state.transcript.append({"role": "assistant", "content": self.domain.opening})
-        return self.domain.opening
-
-    def handle(self, state: SessionState, text: str) -> TurnResult:
-        t_turn = time.perf_counter()
-        calls: list[CallStats] = []
-        phase_before = state.phase
-
-        # 1. Extract. After verification, the extractor also sees the caller's record labels,
-        #    so it can map the paper mill one to an ID.
-        D = self.domain
-        candidates = None
-        if state.verified:
-            candidates = [D.label(r) for r in self.store.records_for(state.verified_party_id)]
-        ex_res = self.llm.extract(X.system_prompt(D), X.build_user_message(state, text, self.cfg.today(), candidates),
-                                  X.json_schema(D), "record_turn")
-        calls.append(ex_res.stats)
-        ex = X.parse(ex_res.value, D)
-        if not ex_res.stats.parse_ok:
-            # The turn still runs; an empty extraction just asks again.
-            state.log("extract_parse_failed", mode=ex_res.stats.mode)
-        state.transcript.append({"role": "user", "content": text})
-
-        # 2. Control.
-        t_ctl = time.perf_counter()
-        directives: list[dict] = []
-        ctx = {"grounded": None, "utterance": text}
-        self._control(state, ex, directives, ctx)
-        ctl_ms = (time.perf_counter() - t_ctl) * 1000
-
-        # 3. Respond, then guard.
-        grounded = ctx["grounded"] if state.verified else None
-        payload = R.build_payload(state, D, directives, grounded, ex.question, ex.emotion)
-        gen = self.llm.generate(R.system_prompt(D), R.build_user_message(state, payload))
-        calls.append(gen.stats)
-        reply = gen.value
-        reply_source = "offline_template" if getattr(self.llm, "name", "").startswith("offline") else "model"
-        if not reply:
-            # Never silent: the trace says the model came back empty and why.
-            reply = R.render_template(payload)
-            reply_source = "template_empty_model_reply"
-            state.log("empty_model_reply", stop_reason=gen.stats.stop_reason,
-                      thinking_chars=gen.stats.thinking_chars)
-
-        t_guard = time.perf_counter()
-        user_texts = [m["content"] for m in state.transcript if m["role"] == "user"]
-        problems = R.guard(reply, state, self.store, D, grounded, user_texts)
-        if problems:
-            state.log("guard_blocked", problems=problems, blocked=reply)
-            reply = R.render_template(payload)
-            reply_source = "template_guard"
-        guard_ms = (time.perf_counter() - t_guard) * 1000
-
-        state.transcript.append({"role": "assistant", "content": reply})
-        total_ms = (time.perf_counter() - t_turn) * 1000
-        trace = {
-            "phase_before": phase_before.value,
-            "phase_after": state.phase.value,
-            "extraction": mask_pii(ex.model_dump(exclude_defaults=True)),
-            "directives": directives,
-            "grounded_keys": sorted((grounded or {}).keys()),
-            "guard": problems,
-            "reply_source": reply_source,
-            "timing_ms": {
-                "extract": round(ex_res.stats.latency_ms, 1),
-                "control": round(ctl_ms, 2),
-                "respond": round(gen.stats.latency_ms, 1),
-                "guard": round(guard_ms, 2),
-                "total": round(total_ms, 1),
-            },
-            "calls": [asdict(c) for c in calls],
-        }
-        state.log("turn", phase_before=phase_before.value, phase_after=state.phase.value,
-                  directives=[d["action"] for d in directives], guard=problems)
-        return TurnResult(reply, state, trace)
-
-    # ------------------------------------------------------------ control
-
-    def _control(self, s: SessionState, ex: X._Base, out: list[dict], ctx: dict) -> None:
+    def _control(self, s: SessionState, ex: Extraction, out: list[dict], ctx: dict) -> None:
         if s.phase in (Phase.HUMAN_HANDOFF, Phase.ENDED):
             out.append({"action": "handoff" if s.phase == Phase.HUMAN_HANDOFF else "ended"})
             return
@@ -228,7 +121,7 @@ class Agent:
 
     # ------------------------------------------------------------ speaker change
 
-    def _identity_switched(self, s: SessionState, ex: X._Base) -> bool:
+    def _identity_switched(self, s: SessionState, ex: Extraction) -> bool:
         """Reset to VERIFY_ID if someone new speaks after verification.
 
         A new speaker is a representative joining, a different representative, or a
@@ -260,7 +153,7 @@ class Agent:
 
     # ------------------------------------------------------------ merge
 
-    def _merge(self, s: SessionState, ex: X._Base) -> None:
+    def _merge(self, s: SessionState, ex: Extraction) -> None:
         if s.phase == Phase.VERIFY_ID:
             for f in (*IDENTITY_FIELDS, "account_number"):
                 v = getattr(ex, f)
@@ -301,20 +194,20 @@ class Agent:
         s.last_emotion = ex.emotion
 
     @staticmethod
-    def _turn_hints(ex: X._Base) -> IntentMemory:
+    def _turn_hints(ex: Extraction) -> IntentMemory:
         return IntentMemory(record_id=ex.record_id, party=ex.party, category=ex.category, status=ex.record_status,
                             date=ex.date, month=ex.month, year=ex.year, intent=ex.intent)
 
     # ------------------------------------------------------------ VERIFY_ID
 
-    def _verify_phase(self, s: SessionState, ex: X._Base, out: list[dict], ctx: dict) -> None:
+    def _verify_phase(self, s: SessionState, ex: Extraction, out: list[dict], ctx: dict) -> None:
         start = len(out)
         self._verify_inner(s, ex, out, ctx)
         # Acknowledge a remembered hint only while the caller is still unverified.
         if self._turn_hints(ex).any() and not s.verified and s.phase == Phase.VERIFY_ID:
             out.insert(start, {"action": "noted_hint"})
 
-    def _verify_inner(self, s: SessionState, ex: X._Base, out: list[dict], ctx: dict) -> None:
+    def _verify_inner(self, s: SessionState, ex: Extraction, out: list[dict], ctx: dict) -> None:
         if ex.refuses_verification or (ex.emotion in ESCALATING and not s.identity_dirty):
             out.append({"action": "explain_verification"})
 
@@ -405,7 +298,7 @@ class Agent:
         s.log("phase", to=s.phase.value)
         self._resolve_phase(s, None, out, ctx, turn_hints=IntentMemory())
 
-    def _resolve_phase(self, s: SessionState, ex: Optional[X._Base], out: list[dict], ctx: dict,
+    def _resolve_phase(self, s: SessionState, ex: Optional[Extraction], out: list[dict], ctx: dict,
                        turn_hints: IntentMemory) -> None:
         records = self.store.records_for(s.verified_party_id)
         r = resolve(s.memory, records, self.domain)
@@ -438,7 +331,7 @@ class Agent:
 
     # ------------------------------------------------------------ PROCESS_CASE
 
-    def _process_phase(self, s: SessionState, ex: X._Base, out: list[dict], ctx: dict) -> None:
+    def _process_phase(self, s: SessionState, ex: Extraction, out: list[dict], ctx: dict) -> None:
         # Switching records mid conversation.
         th = self._turn_hints(ex)
         if th.has_record_hint():
@@ -462,7 +355,7 @@ class Agent:
             return
         self._answer(s, ex, out, ctx)
 
-    def _answer(self, s: SessionState, ex: Optional[X._Base], out: list[dict], ctx: dict) -> None:
+    def _answer(self, s: SessionState, ex: Optional[Extraction], out: list[dict], ctx: dict) -> None:
         rec = self.store.record(s.selected_id)
         intent = (ex.intent if ex and ex.intent else None) or s.memory.intent
         # Live status: the first status question shows the current update; each one after reads the next.
@@ -495,14 +388,14 @@ class Agent:
 
     # ------------------------------------------------------------ POST_PROCESS
 
-    def _post_phase(self, s: SessionState, ex: X._Base, out: list[dict], ctx: dict, off_topic: bool) -> None:
+    def _post_phase(self, s: SessionState, ex: Extraction, out: list[dict], ctx: dict, off_topic: bool) -> None:
         self._ground(s, ctx)
         if ex.email_choice == "send":
             p = self.store.person(s.verified_party_id)
             email = self.outbox.send(build_summary(s, self.domain, self.cfg.today()))
             s.email_decision, s.email_sent = "send", True
-            s.log("email_sent", to=R.mask_email(p.email), chars=len(email.body))
-            out.append({"action": "email_sent", "email_masked": R.mask_email(p.email)})
+            s.log("email_sent", to=mask_email(p.email), chars=len(email.body))
+            out.append({"action": "email_sent", "email_masked": mask_email(p.email)})
             s.phase = Phase.ENDED
             return
         if ex.email_choice == "skip":
@@ -529,7 +422,7 @@ class Agent:
 
     def _masked_email(self, s: SessionState) -> Optional[str]:
         p = self.store.person(s.verified_party_id or "")
-        return R.mask_email(p.email) if p else None
+        return mask_email(p.email) if p else None
 
     def _ground(self, s: SessionState, ctx: dict, on_file: Optional[list[str]] = None,
                 followup: Optional[dict] = None) -> None:

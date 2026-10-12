@@ -3,11 +3,11 @@ from datetime import date
 
 import pytest
 
-from app.data import fuzzy_match, norm_dob, norm_phone, same_person
-from app.domain import get_domain
-from app.records import document_guidance, followup_answer, map_document, resolve
-from app.state import Identity, IntentMemory
-from app.verify import poll_consent, rep_authorized, verify
+from app.core.data import fuzzy_match, norm_dob, norm_phone, same_person
+from app.core.domain import get_domain
+from app.core.records import document_guidance, followup_answer, map_document, resolve
+from app.core.state import Identity, IntentMemory
+from app.core.verify import poll_consent, rep_authorized, verify
 
 FR, CL, PF = get_domain("freight"), get_domain("clinic"), get_domain("portfolio")
 TODAY = date(2026, 3, 10)
@@ -199,7 +199,7 @@ def test_no_document_rules_for_a_record_without_requests():
 # ------------------------------------------------------------- guard pieces
 
 def test_money_and_time_normalizers():
-    from app.respond import _clocks, _minutes, _norm_money
+    from app.core.guard import _clocks, _minutes, _norm_money
     assert _norm_money("$180") == _norm_money("$180.00") == "180.00"
     assert _clocks("at 3:00 PM or 15:00 or 3:00pm") == {(3, 0)}
     assert _minutes("2 hours") == _minutes("120 minutes") == {120.0}

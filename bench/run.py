@@ -22,11 +22,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.config import settings  # noqa: E402
-from app.controller import Agent  # noqa: E402
-from app.domain import DOMAINS  # noqa: E402
-from app.llm import make_llm  # noqa: E402
-from app.state import SessionState  # noqa: E402
-from app.summary import Outbox  # noqa: E402
+from app.agent import Agent  # noqa: E402
+from app.core.domain import DOMAINS  # noqa: E402
+from app.model.llm import make_llm  # noqa: E402
+from app.core.state import SessionState  # noqa: E402
+from app.core.summary import Outbox  # noqa: E402
 from bench.scenarios import SCENARIOS, Scenario  # noqa: E402
 
 

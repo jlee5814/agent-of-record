@@ -14,7 +14,7 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .config import settings
+from ..config import settings
 
 
 class Person(BaseModel):

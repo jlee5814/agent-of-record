@@ -8,11 +8,12 @@ import json
 import httpx
 import pytest
 
-from app.controller import Agent
-from app.domain import get_domain
-from app.extract import json_schema, system_prompt
-from app.llm import ServerError, SGLangLLM, grammar_schema, strip_think
-from app.state import Phase, SessionState
+from app.agent import Agent
+from app.core.domain import get_domain
+from app.core.extraction import json_schema
+from app.model.extract import system_prompt
+from app.model.llm import ServerError, SGLangLLM, grammar_schema, strip_think
+from app.core.state import Phase, SessionState
 
 
 def sse(text: str = "", pieces: list[str] | None = None, reasoning: str = "", usage: dict | None = None,
@@ -193,7 +194,7 @@ def test_missing_usage_falls_back_to_counting_stream_pieces():
 
 
 def test_cache_hits_reported_by_the_sglang_extension_field():
-    from app.llm import cached_tokens
+    from app.model.llm import cached_tokens
     assert cached_tokens({"sglext": {"cached_tokens": 77}}) == 77
     assert cached_tokens({"cached_tokens": 5}) == 5
     assert cached_tokens({}) == 0

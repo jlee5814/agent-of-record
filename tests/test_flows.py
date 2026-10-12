@@ -8,11 +8,11 @@ import json
 import pytest
 
 from app.config import Settings
-from app.controller import Agent
-from app.offline import OfflineLLM
-from app.state import Phase, SessionState
-from app.summary import Outbox
-from app.verify import FailureRegistry
+from app.agent import Agent
+from app.model.offline import OfflineLLM
+from app.core.state import Phase, SessionState
+from app.core.summary import Outbox
+from app.core.verify import FailureRegistry
 from bench.scenarios import C_CORE, C_ID, C_REP, F_CORE, F_ID, F_REP, P_CORE, P_ID, P_REP
 
 CASES = {

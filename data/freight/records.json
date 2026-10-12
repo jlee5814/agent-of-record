@@ -1,0 +1,57 @@
+[
+  {"record_id": "LD-7731", "party_id": "D1", "counterparty": "Peachtree Foods DC", "location": "Savannah, GA",
+   "category": "reefer", "date": "2026-03-10", "status": "at_facility", "stop_type": "pickup",
+   "summary": "Reefer pickup of frozen produce. Driver checked in early; doors backed up.",
+   "appointment_time": "13:00", "check_in_time": "12:40", "free_time_hours": 2, "detention_rate": "50.00",
+   "detention": {"status": "not_started"},
+   "settlement": null,
+   "documents_needed": ["signed bill of lading with in and out times"], "deadline": null,
+   "live": [
+     {"status": "waiting_for_door", "door": null, "est_minutes": 60, "note": "Doors are backed up after a late inbound truck."},
+     {"status": "door_assigned", "door": "14", "est_minutes": 45, "note": "Back into door 14. Loading starts when the crew frees up."},
+     {"status": "loading", "door": "14", "est_minutes": 30, "note": "The crew is loading now."},
+     {"status": "loaded", "door": "14", "est_minutes": 0, "note": "Loaded. Pick up the signed paperwork at the shipping office."}
+   ]},
+  {"record_id": "LD-7650", "party_id": "D1", "counterparty": "Lakeside Building Supply DC", "location": "Macon, GA",
+   "category": "dry_van", "date": "2026-03-03", "status": "settled", "stop_type": "delivery",
+   "summary": "Dry van delivery of lumber and fixtures. Receiver used a lumper crew.",
+   "appointment_time": "08:00", "check_in_time": "07:45", "free_time_hours": 2, "detention_rate": "50.00",
+   "detention": {"status": "denied", "reason": "the receiver's out time was missing from the bill of lading, so the wait could not be verified"},
+   "settlement": {"gross": "1420.00", "net": "940.00", "deductions": [
+     {"label": "lumper fee", "amount": "180.00", "reason": "Redline paid the lumper crew at the receiver and no lumper receipt was turned in"},
+     {"label": "fuel advance", "amount": "300.00", "reason": "you took a fuel advance on 2026-03-02"}
+   ]},
+   "documents_needed": ["lumper receipt"], "deadline": "2026-03-17", "live": []},
+  {"record_id": "LD-7612", "party_id": "D1", "counterparty": "Peachtree Foods DC", "location": "Savannah, GA",
+   "category": "reefer", "date": "2026-02-24", "status": "settled", "stop_type": "pickup",
+   "summary": "Reefer pickup. Long wait at the dock; detention approved.",
+   "appointment_time": "06:00", "check_in_time": "05:50", "free_time_hours": 2, "detention_rate": "50.00",
+   "detention": {"status": "approved", "hours": "2.5", "amount": "125.00"},
+   "settlement": {"gross": "1775.00", "net": "1775.00", "deductions": []},
+   "documents_needed": [], "deadline": null, "live": []},
+  {"record_id": "LD-7704", "party_id": "D1", "counterparty": "Southline Paper Mill", "location": "Augusta, GA",
+   "category": "flatbed", "date": "2026-03-07", "status": "delivered", "stop_type": "delivery",
+   "summary": "Flatbed delivery of paper rolls. Detention claim filed.",
+   "appointment_time": "10:00", "check_in_time": "09:30", "free_time_hours": 2, "detention_rate": "50.00",
+   "detention": {"status": "pending_review", "hours": "3", "amount": "150.00"},
+   "settlement": null, "documents_needed": [], "deadline": null, "live": []},
+  {"record_id": "LD-8020", "party_id": "D2", "counterparty": "Riverbend Cold Storage", "location": "Charlotte, NC",
+   "category": "reefer", "date": "2026-03-10", "status": "at_facility", "stop_type": "delivery",
+   "summary": "Reefer delivery. Receiver short on staff.",
+   "appointment_time": "11:00", "check_in_time": "10:50", "free_time_hours": 2, "detention_rate": "50.00",
+   "detention": {"status": "not_started"}, "settlement": null,
+   "documents_needed": ["signed bill of lading with in and out times"], "deadline": null,
+   "live": [
+     {"status": "waiting_for_door", "door": null, "est_minutes": 90, "note": "The receiver is short on staff today."},
+     {"status": "door_assigned", "door": "3", "est_minutes": 60, "note": "Back into door 3."}
+   ]},
+  {"record_id": "LD-8105", "party_id": "D3", "counterparty": "Northfield Steel", "location": "Birmingham, AL",
+   "category": "flatbed", "date": "2026-03-05", "status": "settled", "stop_type": "delivery",
+   "summary": "Flatbed delivery of coil steel. Arrived late.",
+   "appointment_time": "07:00", "check_in_time": "10:05", "free_time_hours": 2, "detention_rate": "50.00",
+   "detention": {"status": "none"},
+   "settlement": {"gross": "1300.00", "net": "1200.00", "deductions": [
+     {"label": "late delivery fee", "amount": "100.00", "reason": "the load arrived three hours after the appointment with no call ahead"}
+   ]},
+   "documents_needed": [], "deadline": null, "live": []}
+]

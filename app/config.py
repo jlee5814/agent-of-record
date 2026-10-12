@@ -23,10 +23,12 @@ class Settings:
     max_verify_attempts: int = field(default_factory=lambda: int(_env("MAX_VERIFY_ATTEMPTS", "3")))
     max_off_topic: int = field(default_factory=lambda: int(_env("MAX_OFF_TOPIC", "3")))
     max_frustrated_turns: int = field(default_factory=lambda: int(_env("MAX_FRUSTRATED_TURNS", "3")))
-    # Lockout across sessions: failed attempts against one cardholder within the window.
+    # Lockout across sessions: failed attempts against one account holder within the window.
     max_party_failures: int = field(default_factory=lambda: int(_env("MAX_PARTY_FAILURES", "5")))
     lockout_window_min: int = field(default_factory=lambda: int(_env("LOCKOUT_WINDOW_MIN", "30")))
 
+    # freight or clinic
+    domain: str = field(default_factory=lambda: _env("DOMAIN", "freight"))
     llm_provider: str = field(default_factory=lambda: _env("LLM_PROVIDER", "sglang"))
     base_url: str = field(default_factory=lambda: _env("SGLANG_BASE_URL", "http://localhost:30000/v1"))
     # auto asks the server which model it serves.

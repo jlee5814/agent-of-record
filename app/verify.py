@@ -1,7 +1,7 @@
 """Identity matching, representative checks, and consent polling. No model involved.
 
 A caller is verified when at least three of five fields (name, date of birth,
-phone, email, card last four) match one cardholder and no field given
+phone, email, ID last four) match one account holder and no field given
 contradicts the record. The account number helps find the record but doesn't
 count. Results never say which field failed, so no one can probe fields one
 at a time.
@@ -13,7 +13,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional
 
-from .data import (Cardholder, Store, names_match, norm_account, norm_dob, norm_email,
+from .data import (Person, Store, names_match, norm_account, norm_dob, norm_email,
                    norm_last4, norm_name, norm_phone)
 from .state import IDENTITY_FIELDS, Identity
 
@@ -34,7 +34,7 @@ class VerifyResult:
     detail: dict = field(default_factory=dict)
 
 
-def check_fields(identity: Identity, rec: Cardholder) -> FieldCheck:
+def check_fields(identity: Identity, rec: Person) -> FieldCheck:
     fc = FieldCheck()
 
     def mark(name: str, ok: bool) -> None:
@@ -50,8 +50,8 @@ def check_fields(identity: Identity, rec: Cardholder) -> FieldCheck:
     if identity.email:
         e = norm_email(identity.email)
         mark("email", e is not None and e in {norm_email(x) for x in [rec.email, *rec.email_aliases]})
-    if identity.card_last4:
-        mark("card_last4", norm_last4(identity.card_last4) == rec.card_last4)
+    if identity.id_last4:
+        mark("id_last4", norm_last4(identity.id_last4) == rec.id_last4)
     return fc
 
 
@@ -60,9 +60,9 @@ def verify(identity: Identity, store: Store, min_matches: int = 3) -> VerifyResu
     n = len(provided)
     acct = norm_account(identity.account_number) if identity.account_number else None
 
-    pool = store.cardholders
+    pool = store.people
     if acct:
-        narrowed = [p for p in pool if p.account_number == acct]
+        narrowed = [p for p in pool if norm_account(p.account_number) == acct]
         # An account number that matches nobody does not block; PII still decides.
         pool = narrowed or pool
 
@@ -93,10 +93,10 @@ def verify(identity: Identity, store: Store, min_matches: int = 3) -> VerifyResu
 
 
 class FailureRegistry:
-    """Count failed attempts per cardholder across all sessions.
+    """Count failed attempts per account holder across all sessions.
 
     Without this, an attacker could open a new chat after three misses. Too many
-    recent failures lock the cardholder out of self service, even with correct
+    recent failures lock the account holder out of self service, even with correct
     details, and send the caller to a person.
     """
 
@@ -124,12 +124,11 @@ class FailureRegistry:
 
 
 def rep_authorized(rep_name: Optional[str], party_id: str, store: Store) -> bool:
-    """True if the caller is on file as an authorized user for this cardholder."""
+    """True if the caller is on file as an authorized contact for this account holder."""
     if not rep_name:
         return False
     target = norm_name(rep_name)
-    return any(a.cardholder_party_id == party_id and norm_name(a.name) == target
-               for a in store.authorized_users)
+    return any(c.party_id == party_id and norm_name(c.name) == target for c in store.contacts)
 
 
 def poll_consent(scenario: str, polls_so_far: int, store: Store) -> tuple[str, int]:

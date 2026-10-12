@@ -9,7 +9,8 @@ import httpx
 import pytest
 
 from app.controller import Agent
-from app.extract import SYSTEM as X_SYSTEM, json_schema
+from app.domain import get_domain
+from app.extract import json_schema, system_prompt
 from app.llm import ServerError, SGLangLLM, grammar_schema, strip_think
 from app.state import Phase, SessionState
 
@@ -49,7 +50,9 @@ def client(handler, **kw) -> tuple[SGLangLLM, FakeServer]:
     return SGLangLLM("http://sglang.test/v1", transport=httpx.MockTransport(fake), **kw), fake
 
 
-SCHEMA = json_schema()
+FREIGHT = get_domain("freight")
+SCHEMA = json_schema(FREIGHT)
+X_SYSTEM = system_prompt(FREIGHT)
 
 
 # ------------------------------------------------------------------ wire format
@@ -60,7 +63,7 @@ def test_model_name_comes_from_the_server_when_auto():
 
 
 def test_extract_request_is_greedy_grammar_constrained_and_never_thinks():
-    llm, fake = client(lambda b, n: (200, sse('{"full_name": "Daniel Okafor"}')))
+    llm, fake = client(lambda b, n: (200, sse('{"full_name": "Tony Alvarez"}')))
     r = llm.extract(X_SYSTEM, "LATEST CALLER MESSAGE:\nhi", SCHEMA)
     body = fake.bodies[0]
     assert body["stream"] is True and body["stream_options"] == {"include_usage": True}
@@ -68,7 +71,7 @@ def test_extract_request_is_greedy_grammar_constrained_and_never_thinks():
     assert body["temperature"] == 0.0 and "top_p" not in body
     rf = body["response_format"]
     assert rf["type"] == "json_schema" and rf["json_schema"]["strict"] is True
-    assert r.value == {"full_name": "Daniel Okafor"} and r.stats.mode == "json_schema" and r.stats.parse_ok
+    assert r.value == {"full_name": "Tony Alvarez"} and r.stats.mode == "json_schema" and r.stats.parse_ok
 
 
 def test_grammar_schema_drops_null_branches_and_bounds():
@@ -77,7 +80,10 @@ def test_grammar_schema_drops_null_branches_and_bounds():
     assert '"null"' not in blob and "maximum" not in blob and "title" not in blob
     assert g["required"] == [] and g["additionalProperties"] is False
     assert g["properties"]["month"] == {"type": "integer"}
-    assert set(g["properties"]["reason"]["enum"]) >= {"item_not_received", "fraud"}
+    assert set(g["properties"]["category"]["enum"]) == {"reefer", "dry_van", "flatbed"}
+    assert "dock_status" in g["properties"]["intent"]["enum"]
+    clinic = grammar_schema(json_schema(get_domain("clinic")))
+    assert "wait_time" in clinic["properties"]["intent"]["enum"]
 
 
 def test_generate_uses_qwen_sampling_without_thinking():
@@ -103,11 +109,11 @@ def test_rejected_json_schema_falls_back_and_the_mode_sticks():
     def handler(body, n):
         if body.get("response_format", {}).get("type") == "json_schema":
             return 400, "response_format json_schema is not supported by this backend"
-        return 200, sse('{"dob": "1979-06-02"}')
+        return 200, sse('{"dob": "1981-09-14"}')
 
     llm, fake = client(handler)
     r = llm.extract(X_SYSTEM, "hi", SCHEMA)
-    assert r.value == {"dob": "1979-06-02"} and r.stats.mode == "json_object" and llm.extract_mode == "json_object"
+    assert r.value == {"dob": "1981-09-14"} and r.stats.mode == "json_object" and llm.extract_mode == "json_object"
     llm.extract(X_SYSTEM, "again", SCHEMA)
     assert [b.get("response_format", {}).get("type") for b in fake.bodies] == ["json_schema", "json_object", "json_object"]
     assert "matching this schema" in fake.bodies[1]["messages"][0]["content"]
@@ -117,12 +123,12 @@ def test_accepted_but_ignored_constraint_falls_back():
     """Some backends take response_format and decode freely anyway."""
     def handler(body, n):
         if body.get("response_format", {}).get("type") == "json_schema":
-            return 200, sse("Sure! The caller's name is Daniel.")
-        return 200, sse('{"full_name": "Daniel Okafor"}')
+            return 200, sse("Sure! The caller's name is Tony.")
+        return 200, sse('{"full_name": "Tony Alvarez"}')
 
     llm, _ = client(handler)
     r = llm.extract(X_SYSTEM, "hi", SCHEMA)
-    assert r.stats.mode == "json_object" and r.value["full_name"] == "Daniel Okafor"
+    assert r.stats.mode == "json_object" and r.value["full_name"] == "Tony Alvarez"
 
 
 def test_once_a_mode_works_a_later_rejection_is_raised_not_hidden():
@@ -137,9 +143,9 @@ def test_once_a_mode_works_a_later_rejection_is_raised_not_hidden():
 
 
 def test_forced_prompt_mode_sends_no_response_format():
-    llm, fake = client(lambda b, n: (200, sse('```json\n{"card_last4": "8812"}\n```')), extract_mode="prompt")
+    llm, fake = client(lambda b, n: (200, sse('```json\n{"id_last4": "4417"}\n```')), extract_mode="prompt")
     r = llm.extract(X_SYSTEM, "hi", SCHEMA)
-    assert "response_format" not in fake.bodies[0] and r.value == {"card_last4": "8812"} and r.stats.mode == "prompt"
+    assert "response_format" not in fake.bodies[0] and r.value == {"id_last4": "4417"} and r.stats.mode == "prompt"
 
 
 def test_unknown_mode_is_refused():
@@ -148,7 +154,7 @@ def test_unknown_mode_is_refused():
 
 
 def test_prose_in_the_last_mode_is_a_counted_parse_failure():
-    llm, _ = client(lambda b, n: (200, sse("I think the caller is Daniel.")), extract_mode="prompt")
+    llm, _ = client(lambda b, n: (200, sse("I think the caller is Tony.")), extract_mode="prompt")
     r = llm.extract(X_SYSTEM, "hi", SCHEMA)
     assert r.value == {} and r.stats.parse_ok is False
 
@@ -172,7 +178,7 @@ def test_reasoning_content_is_counted_and_kept_out_of_the_reply():
 
 def test_stats_read_usage_cache_hits_and_timing():
     usage = {"prompt_tokens": 1200, "completion_tokens": 40, "prompt_tokens_details": {"cached_tokens": 1024}}
-    llm, _ = client(lambda b, n: (200, sse(pieces=["Your ", "dispute ", "is ", "open."], usage=usage)))
+    llm, _ = client(lambda b, n: (200, sse(pieces=["Your ", "load ", "is ", "ready."], usage=usage)))
     s = llm.generate("system", "user").stats
     assert (s.input_tokens, s.output_tokens, s.cached_tokens) == (1200, 40, 1024)
     assert s.ttft_ms > 0 and s.latency_ms >= s.ttft_ms and s.decode_tps > 0 and s.stop_reason == "stop"
@@ -195,37 +201,36 @@ def test_cache_hits_reported_by_the_sglang_extension_field():
 
 def test_full_turn_through_the_agent_with_a_mock_qwen():
     """Extraction and reply both come over the wire; the gate and guard still hold."""
-    extraction = {"full_name": "Daniel Okafor", "dob": "1979-06-02", "card_last4": "8812",
-                  "merchant": "Bluewater", "reason": "item_not_received", "intent": "status_inquiry"}
+    extraction = {"full_name": "Tony Alvarez", "dob": "1981-09-14", "id_last4": "4417", "party": "Peachtree",
+                  "date": "2026-03-10", "intent": "dock_status"}
 
     def handler(body, n):
         if "response_format" in body:
             return 200, sse(json.dumps(extraction))
-        return 200, sse("Thanks Daniel, you're verified. Dispute DSP-4102 is waiting on your proof of order and "
-                        "merchant correspondence, due by 2026-03-20. You'll get $1,249.99 back for sure.")
+        return 200, sse("You're verified, Tony. Load LD-7731 at Peachtree is waiting for a door; the facility "
+                        "estimates about 60 minutes.")
 
     llm, _ = client(handler)
-    a = Agent(llm)
+    a = Agent(llm, "freight")
     s = SessionState()
     a.opening(s)
-    r = a.handle(s, "Hi, it's Daniel Okafor ...")
-    assert s.verified_party_id == "C1" and s.selected_id == "DSP-4102" and s.phase == Phase.PROCESS_CASE
-    # $1,249.99 is grounded, so the guard passes it; the promise is the bench's job to catch, not the guard's.
+    r = a.handle(s, "Hi, it's Tony ...")
+    assert s.verified_party_id == "D1" and s.selected_id == "LD-7731" and s.phase == Phase.PROCESS_CASE
     assert r.trace["reply_source"] == "model" and r.trace["guard"] == []
     assert [c["stage"] for c in r.trace["calls"]] == ["extract", "respond"]
     assert r.trace["calls"][0]["mode"] == "json_schema"
 
 
-def test_ungrounded_amount_from_the_model_is_replaced():
+def test_an_invented_wait_time_from_the_model_is_replaced():
     def handler(body, n):
         if "response_format" in body:
-            return 200, sse(json.dumps({"full_name": "Daniel Okafor", "dob": "1979-06-02", "card_last4": "8812",
-                                        "merchant": "Bluewater", "reason": "item_not_received"}))
-        return 200, sse("Good news, a $500.00 credit is on its way.")
+            return 200, sse(json.dumps({"full_name": "Hannah Kim", "dob": "1988-07-19", "id_last4": "5530",
+                                        "record_status": "waiting", "intent": "wait_time"}))
+        return 200, sse("Good news, the doctor will see you in 5 minutes.")
 
     llm, _ = client(handler)
-    a = Agent(llm)
+    a = Agent(llm, "clinic")
     s = SessionState()
     a.opening(s)
     r = a.handle(s, "hi")
-    assert r.trace["reply_source"] == "template_guard" and "$500" not in r.reply
+    assert r.trace["reply_source"] == "template_guard" and "in 5 minutes" not in r.reply and "35" in r.reply

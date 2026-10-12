@@ -1,0 +1,38 @@
+{
+  "default_guidance": "Send paperwork through the Redline driver app under Loads, or take a clear photo and email it to settlements. Every page should show the load number, the facility, and the date.",
+  "category_guidance": {
+    "reefer": "For reefer loads, include the temperature printout if the shipper gave you one.",
+    "flatbed": "For flatbed loads, note any tarping or securement delays on the bill of lading."
+  },
+  "document_guidance": {
+    "signed bill of lading with in and out times": "Ask the shipping or receiving office to write your in time and out time on the bill of lading and sign next to them. Detention can't be paid without both times.",
+    "lumper receipt": "The lumper receipt should show the facility, the date, the load or PO number, and the amount paid."
+  },
+  "document_alternatives": {
+    "default": "If you don't have the exact document, send what you have with a short note. Settlements will review other proof.",
+    "signed bill of lading with in and out times": "If the office won't sign the times, take a timestamped photo at the gate and at the door, and note who you spoke with.",
+    "lumper receipt": "If you lost the lumper receipt, ask the facility's receiving office for a copy, or send the payment confirmation from the lumper service."
+  },
+  "followup_settings": {
+    "processing_time": "the next weekly settlement",
+    "human_review_rule": "If no paperwork or alternative is available, a settlements specialist reviews the load by hand."
+  },
+  "followup_rules": [
+    {"topic": "missing_document_alternatives", "requires_documents": true,
+     "match_any": ["don't have", "do not have", "can't find", "lost", "won't sign", "wouldn't sign", "no receipt"],
+     "text": "If you can't get {documents}, send what you have with a short note. A settlements specialist will review other proof for load {record_id}."},
+    {"topic": "submission_timing", "requires_documents": true,
+     "match_any": ["how soon", "when do i", "when should", "deadline", "by when", "how long do i have"],
+     "text": "For load {record_id}, send {documents} as soon as you have it. Paperwork in by Thursday makes that week's settlement."},
+    {"topic": "processing_time", "requires_documents": false,
+     "match_any": ["when will i see", "when do i get paid", "how long until", "when does it pay", "how long does it take"],
+     "text": "Approved paperwork is paid on {processing_time}."},
+    {"topic": "submission_method", "requires_documents": true,
+     "match_any": ["how do i send", "where do i send", "upload", "the app", "email it", "scan"],
+     "text": "Upload {documents} in the Redline driver app under Loads, or email a clear photo to settlements."},
+    {"topic": "file_format", "requires_documents": true,
+     "match_any": ["photo", "picture", "pdf", "blurry", "format"],
+     "text": "A clear photo or a PDF works, as long as the load number, the date, and any signatures are readable."}
+  ],
+  "followup_fallback": "I don't have a specific answer for that. A settlements specialist can help, or I can tell you what's on file for this load."
+}

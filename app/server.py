@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from .config import ROOT, settings
 from .controller import Agent
-from .data import load_store
+from .domain import DOMAINS, get_domain
 from .llm import make_llm
 from .state import IDENTITY_FIELDS, Phase, SessionState
 from .summary import Outbox
@@ -30,10 +30,9 @@ def _error_detail(e: Exception) -> str:
     return (getattr(e, "message", None) or str(e) or "no detail")[:400]
 
 
-STORE = load_store()
 OUTBOX = Outbox()
-# One registry for every session, so a lockout cannot be dodged by opening a new chat.
-FAILURES = FailureRegistry(settings.max_party_failures, settings.lockout_window_min * 60)
+# One registry per domain for every session, so a lockout cannot be dodged by opening a new chat.
+FAILURES: dict[str, FailureRegistry] = {}
 
 
 class Session:
@@ -51,6 +50,7 @@ class NewSession(BaseModel):
     model: Optional[str] = None
     base_url: Optional[str] = None
     extract_mode: Optional[str] = None      # json_schema | json_object | prompt; empty tries each
+    domain: Optional[str] = None            # freight | clinic
     consent_scenario: str = "default"
 
 
@@ -87,7 +87,11 @@ def view(sess: Session) -> dict:
                    "rep_authorized": s.rep_authorized},
         "consent": s.consent.model_dump(),
         "memory": s.memory.model_dump(exclude_none=True),
-        "dispute": {"selected": s.selected_id, "candidates": s.candidate_ids, "discussed": list(s.topics_discussed)},
+        "domain": {"key": sess.agent.domain.key, "org": sess.agent.domain.org, "noun": sess.agent.domain.record_noun,
+                   "person": sess.agent.domain.person_noun, "id_last4": sess.agent.domain.id_last4_label,
+                   "account": sess.agent.domain.account_label},
+        "record": {"selected": s.selected_id, "candidates": s.candidate_ids, "discussed": list(s.topics_discussed),
+                   "live_polls": s.live_polls},
         "extract_mode": getattr(sess.agent.llm, "extract_mode", None) or "rules",
         "signals": {"emotion": s.last_emotion, "frustration_streak": s.frustration_streak,
                     "off_topic_strikes": s.off_topic_strikes, "handoff_offered": s.handoff_offered,
@@ -108,7 +112,8 @@ def config():
         "default_provider": settings.llm_provider,
         "default_model": settings.model,
         "default_base_url": settings.base_url,
-        "consent_scenarios": list(STORE.consent_scenarios.keys()),
+        "default_domain": settings.domain,
+        "domains": {k: {"org": get_domain(k).org, "examples": get_domain(k).examples} for k in DOMAINS},
         "demo_today": settings.today().isoformat(),
     }
 
@@ -122,10 +127,15 @@ def new_session(body: NewSession):
                        os.getenv("QWEN_THINKING") == "1")
     except Exception as e:  # server down, bad URL, unknown mode
         raise HTTPException(400, f"Could not reach the model server: {_error_detail(e)}")
+    try:
+        domain = get_domain(body.domain or settings.domain)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     state = SessionState()
-    if body.consent_scenario in STORE.consent_scenarios:
+    if body.consent_scenario in domain.store.consent_scenarios:
         state.consent.scenario = body.consent_scenario
-    agent = Agent(llm, STORE, settings, OUTBOX, FAILURES)
+    agent = Agent(llm, domain, settings, OUTBOX, FAILURES.setdefault(domain.key, FailureRegistry(
+        settings.max_party_failures, settings.lockout_window_min * 60)))
     sess = Session(agent, state, provider, getattr(llm, "model", "rules"))
     opening = agent.opening(state)
     SESSIONS[state.session_id] = sess

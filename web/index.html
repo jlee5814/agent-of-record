@@ -138,9 +138,9 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
   <aside id="panel" aria-label="SOP state">
     <h2>Procedure</h2>
     <ol class="rail" id="rail">
-      <li data-p="VERIFY_ID"><span class="dot"></span>Verify identity<small>Three matching identity details; no dispute data before this</small></li>
-      <li data-p="RESOLVE_INTENT"><span class="dot"></span>Resolve intent<small>Match the caller's words to one of their disputes</small></li>
-      <li data-p="PROCESS_CASE"><span class="dot"></span>Handle dispute<small>Answer from dispute records and guidance only</small></li>
+      <li data-p="VERIFY_ID"><span class="dot"></span>Verify identity<small>Three matching identity details; no record data before this</small></li>
+      <li data-p="RESOLVE_INTENT"><span class="dot"></span>Resolve intent<small>Match the caller's words to one of their <span class="noun">record</span>s</small></li>
+      <li data-p="PROCESS_CASE"><span class="dot"></span>Answer<small>From the <span class="noun">record</span> and guidance only</small></li>
       <li data-p="POST_PROCESS"><span class="dot"></span>Follow up<small>Offer an email summary, send or skip</small></li>
     </ol>
     <div class="exit" id="exit"></div>
@@ -152,7 +152,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
     <h2>Remembered from the caller</h2>
     <div class="note" id="memory"></div>
 
-    <h2>Dispute</h2>
+    <h2 id="recordHead">Record</h2>
     <dl class="kv" id="case"></dl>
 
     <h2>Caller signals</h2>
@@ -163,7 +163,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
     <details><summary>Directives and extraction</summary><pre id="trace"></pre></details>
 
     <h2>Email summary</h2>
-    <div id="mail"><p class="hint">Offered after the dispute is handled. Sent only to the address on file.</p></div>
+    <div id="mail"><p class="hint">Offered at the end of the chat. Sent only to the address on file.</p></div>
 
     <h2>Event log</h2>
     <ul class="events" id="events"></ul>
@@ -174,6 +174,11 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
   <form method="dialog" id="settingsForm">
     <h3 style="margin:0 0 4px;font-size:17px">Settings</h3>
     <p class="hint">Changes apply to the next conversation.</p>
+    <label for="domain">Scenario</label>
+    <select id="domain">
+      <option value="freight">Freight: a driver at the dock, detention, settlement pay</option>
+      <option value="clinic">Clinic: the waiting room, your turn, the bill</option>
+    </select>
     <label for="provider">Model provider</label>
     <select id="provider">
       <option value="sglang">SGLang (local Qwen3)</option>
@@ -199,15 +204,8 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
 <script>
 const $ = s => document.querySelector(s);
 const PHASES = ["VERIFY_ID","RESOLVE_INTENT","PROCESS_CASE","POST_PROCESS"];
-const TRIES = [
-  ["Laptop never arrived","Hi, this is Daniel Okafor, account ACC-30417. I'm calling about my Bluewater dispute, the laptop never arrived. Date of birth 1979-06-02, card ending 8812."],
-  ["Frustrated caller","I already told you who I am. This is ridiculous. Just tell me what's happening with my dispute."],
-  ["Off topic","What is RL?"],
-  ["Spouse calling","Hi, I'm Grace Okafor, calling for my husband Daniel Okafor. His date of birth is 1979-06-02 and the card ends in 8812."],
-  ["Misspelled name","My name is Lena Hofman, born January 30 1986, email lena.h@example.org"],
-  ["Ambiguous dispute","My name is Daniel Okafor, DOB 1979-06-02, card ending 8812. It's about my Bluewater charge from February."],
-];
-const cfg = {provider:null, model:"", baseUrl:"", extractMode:"", scenario:"default"};
+let EXAMPLES = {};
+const cfg = {domain:null, provider:null, model:"", baseUrl:"", extractMode:"", scenario:"default"};
 let sid = null, busy = false, prev = null;
 
 function load(){ try{ Object.assign(cfg, JSON.parse(sessionStorage.getItem("gated-cfg")||"{}")); }catch(e){} }
@@ -230,7 +228,8 @@ async function api(path, body){
 async function start(){
   $("#log").innerHTML = ""; sid = null; prev = null;
   try{
-    const j = await api("/api/session", {provider: cfg.provider, model: cfg.model || null, base_url: cfg.baseUrl || null,
+    showTries();
+    const j = await api("/api/session", {domain: cfg.domain, provider: cfg.provider, model: cfg.model || null, base_url: cfg.baseUrl || null,
                                          extract_mode: cfg.extractMode || null, consent_scenario: cfg.scenario});
     sid = j.session_id; add("agent", j.reply); render(j.state);
   }catch(e){ add("err", e.message + " Open Settings to fix it."); $("#meta").textContent = "Not connected"; }
@@ -258,7 +257,7 @@ function dl(el, rows){ el.innerHTML = rows.filter(r => r[1] !== undefined && r[1
 function esc(s){ return s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
 function render(s){
-  $("#meta").textContent = `${s.provider} · ${s.model} · extraction ${s.extract_mode.replace("_"," ")} · demo date ${s.today}`;
+  $("#meta").textContent = `${s.domain.org} · ${s.model} · extraction ${s.extract_mode.replace("_"," ")} · demo date ${s.today}`;
   // rail
   const idx = PHASES.indexOf(s.phase);
   const terminal = s.phase === "HUMAN_HANDOFF" || s.phase === "ENDED";
@@ -276,24 +275,29 @@ function render(s){
   const gate = $("#gate");
   gate.className = "gate " + (open ? "open" : "locked");
   $("#gateIc").textContent = open ? "🔓" : "🔒";
-  $("#gateTitle").textContent = open ? "Open: dispute details may be shared" : "Locked: no dispute details";
+  const D = s.domain;
+  document.querySelectorAll(".noun").forEach(n => n.textContent = D.noun);
+  $("#recordHead").textContent = D.noun[0].toUpperCase() + D.noun.slice(1);
+  $("#gateTitle").textContent = open ? `Open: ${D.noun} details may be shared` : `Locked: no ${D.noun} details`;
   let sub = `${g.pii_provided} of ${g.pii_required} identity details given · attempt ${g.verify_attempts} of ${g.max_attempts}`;
   if(s.caller.role === "representative") sub += ` · caller ${s.caller.rep_authorized === false ? "not authorized" : s.caller.rep_authorized ? "authorized" : "unchecked"} · consent ${s.consent.status.replaceAll("_"," ")}`;
   $("#gateSub").textContent = sub;
   flashIf(gate, prev && prev.open !== open);
-  dl($("#ident"), [["Caller", s.caller.role === "representative" ? `${s.caller.rep_name||"representative"}${s.caller.relationship? " ("+s.caller.relationship+")":""}` : s.caller.role],
+  dl($("#ident"), [["Caller", s.caller.role === "representative" ? `${s.caller.rep_name||"representative"}${s.caller.relationship? " ("+s.caller.relationship+")":""}` : s.caller.role === "holder" ? D.person : s.caller.role],
     ["Name", s.identity.full_name], ["Date of birth", s.identity.dob], ["Phone", s.identity.phone], ["Email", s.identity.email],
-    ["Card last four", s.identity.card_last4], ["Account (lookup only)", s.identity.account_number]]);
+    ["ID last four", s.identity.id_last4], [`${D.account[0].toUpperCase() + D.account.slice(1)} (lookup only)`, s.identity.account_number]]);
   // memory
   const m = s.memory, parts = [];
-  if(m.status) parts.push(m.status); if(m.merchant) parts.push(m.merchant); if(m.reason) parts.push(m.reason.replaceAll("_"," "));
+  if(m.status) parts.push(m.status.replaceAll("_"," ")); if(m.merchant) parts.push(m.merchant); if(m.reason) parts.push(m.reason.replaceAll("_"," "));
   if(m.month) parts.push("from " + new Date(2000, m.month-1).toLocaleString("en",{month:"long"}));
-  if(m.year) parts.push(m.year); if(m.dispute_id) parts.push(m.dispute_id);
-  const memText = parts.length ? `Dispute hint: ${parts.join(", ")}` + (m.intent ? `. Wants: ${m.intent.replaceAll("_"," ")}.` : ".") : (m.intent ? `Wants: ${m.intent.replaceAll("_"," ")}.` : "");
+  if(m.date) parts.push(m.date); if(m.year) parts.push(m.year); if(m.record_id) parts.push(m.record_id);
+  const memText = parts.length ? `Hint: ${parts.join(", ")}` + (m.intent ? `. Wants: ${m.intent.replaceAll("_"," ")}.` : ".") : (m.intent ? `Wants: ${m.intent.replaceAll("_"," ")}.` : "");
   const mem = $("#memory"); mem.textContent = memText;
   flashIf(mem, prev && prev.mem !== memText && memText);
-  dl($("#case"), [["Selected", s.dispute.selected], ["Candidates", (s.dispute.candidates||[]).join(", ")],
-    ["Discussed", (s.dispute.discussed||[]).join(", ")]]);
+  const lp = s.record.live_polls || {};
+  dl($("#case"), [["Selected", s.record.selected], ["Candidates", (s.record.candidates||[]).join(", ")],
+    ["Discussed", (s.record.discussed||[]).join(", ")],
+    ["Live update shown", s.record.selected && s.record.selected in lp ? `#${lp[s.record.selected] + 1}` : ""]]);
   // signals
   const sig = s.signals;
   $("#signals").innerHTML = [
@@ -322,7 +326,7 @@ function render(s){
   // mail
   const msgs = s.email.messages || [];
   $("#mail").innerHTML = msgs.length ? msgs.map(mm => `<div class="mail"><header><b>To</b> ${esc(mm.to)}<br><b>Subject</b> ${esc(mm.subject)}</header><pre>${esc(mm.body)}</pre></div>`).join("")
-    : s.email.decision === "skip" ? `<p class="hint">The caller chose to skip the email.</p>` : `<p class="hint">Offered after the dispute is handled. Sent only to the address on file.</p>`;
+    : s.email.decision === "skip" ? `<p class="hint">The caller chose to skip the email.</p>` : `<p class="hint">Offered at the end of the chat. Sent only to the address on file.</p>`;
   // events
   $("#events").innerHTML = s.events.slice(-14).reverse().map(e =>
     `<li><b>${esc(e.kind.replaceAll("_"," "))}</b> ${esc(Object.entries(e.data).filter(([k,v])=>v!==null&&v!==""&&!(Array.isArray(v)&&!v.length)).map(([k,v])=>`${k}=${typeof v==="object"?JSON.stringify(v):v}`).join(" "))}</li>`).join("");
@@ -330,18 +334,22 @@ function render(s){
 }
 
 // wiring
-TRIES.forEach(([label, text]) => { const b = document.createElement("button"); b.type="button"; b.textContent = label;
-  b.title = text; b.onclick = () => { $("#input").value = text; $("#input").focus(); }; $("#tries").appendChild(b); });
+function showTries(){
+  $("#tries").innerHTML = "";
+  (EXAMPLES[cfg.domain] || []).forEach(([label, text]) => { const b = document.createElement("button"); b.type="button";
+    b.textContent = label; b.title = text; b.onclick = () => { $("#input").value = text; $("#input").focus(); };
+    $("#tries").appendChild(b); });
+}
 $("#compose").addEventListener("submit", e => { e.preventDefault(); const v = $("#input").value; $("#input").value = ""; send(v); });
 $("#input").addEventListener("keydown", e => { if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); $("#compose").requestSubmit(); } });
 $("#newSession").onclick = start;
 $("#togglePanel").onclick = () => { const p = $("#panel"); const on = p.classList.toggle("show"); $("#togglePanel").setAttribute("aria-expanded", on); };
 $("#openSettings").onclick = () => {
-  $("#provider").value = cfg.provider; $("#model").value = cfg.model; $("#extractMode").value = cfg.extractMode;
+  $("#domain").value = cfg.domain; $("#provider").value = cfg.provider; $("#model").value = cfg.model; $("#extractMode").value = cfg.extractMode;
   $("#baseUrl").value = cfg.baseUrl; $("#scenario").value = cfg.scenario; $("#settings").showModal(); };
 $("#settingsForm").addEventListener("submit", e => {
   if(e.submitter && e.submitter.value === "ok"){
-    Object.assign(cfg, {provider: $("#provider").value, model: $("#model").value.trim(), extractMode: $("#extractMode").value,
+    Object.assign(cfg, {domain: $("#domain").value, provider: $("#provider").value, model: $("#model").value.trim(), extractMode: $("#extractMode").value,
                         baseUrl: $("#baseUrl").value.trim(), scenario: $("#scenario").value});
     save(); start();
   }
@@ -352,8 +360,10 @@ $("#settingsForm").addEventListener("submit", e => {
   try{
     const c = await api("/api/config");
     if(!cfg.provider) cfg.provider = c.default_provider;
+    if(!cfg.domain) cfg.domain = c.default_domain;
+    EXAMPLES = Object.fromEntries(Object.entries(c.domains).map(([k, v]) => [k, v.examples]));
     $("#baseUrl").placeholder = c.default_base_url;
-  }catch(e){ cfg.provider = cfg.provider || "offline"; }
+  }catch(e){ cfg.provider = cfg.provider || "offline"; cfg.domain = cfg.domain || "freight"; }
   await start();
   if(!sid && cfg.provider !== "offline"){
     add("sys", "SGLang isn't reachable, so this chat runs in offline rules mode. Start the server and open Settings to switch back.");

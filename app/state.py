@@ -18,7 +18,7 @@ class Phase(str, Enum):
     ENDED = "ENDED"
 
 
-IDENTITY_FIELDS = ("full_name", "dob", "phone", "email", "card_last4")
+IDENTITY_FIELDS = ("full_name", "dob", "phone", "email", "id_last4")
 
 
 class Identity(BaseModel):
@@ -27,25 +27,26 @@ class Identity(BaseModel):
     dob: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
-    card_last4: Optional[str] = None
+    id_last4: Optional[str] = None       # CDL or insurance member ID, by domain
     account_number: Optional[str] = None  # lookup key only; not one of the five PII fields
 
     def provided(self) -> list[str]:
         return [f for f in IDENTITY_FIELDS if getattr(self, f)]
 
 
-HINT_FIELDS = ("dispute_id", "merchant", "reason", "status", "month", "year")
+HINT_FIELDS = ("record_id", "party", "category", "status", "date", "month", "year")
 
 
 class IntentMemory(BaseModel):
-    """Dispute hints saved whenever the caller gives them, even before verification."""
-    dispute_id: Optional[str] = None
-    merchant: Optional[str] = None
-    reason: Optional[str] = None         # item_not_received | duplicate_charge | wrong_amount | ...
-    status: Optional[str] = None         # open | credited | denied
-    month: Optional[int] = None          # month of the charge, 1..12
+    """Hints about which load or visit, saved whenever the caller gives them, even before verification."""
+    record_id: Optional[str] = None
+    party: Optional[str] = None          # facility or provider as spoken
+    category: Optional[str] = None       # equipment type or visit type
+    status: Optional[str] = None         # a status group the domain defines
+    date: Optional[str] = None           # ISO date, when the caller named a day
+    month: Optional[int] = None
     year: Optional[int] = None
-    intent: Optional[str] = None         # decision_question | status_inquiry | document_submission | ...
+    intent: Optional[str] = None
 
     def any(self) -> bool:
         return any(getattr(self, f) for f in (*HINT_FIELDS, "intent"))
@@ -75,7 +76,7 @@ class SessionState(BaseModel):
     verify_attempts: int = 0
     verified_party_id: Optional[str] = None
 
-    caller_role: str = "unknown"          # unknown | cardholder | representative
+    caller_role: str = "unknown"          # unknown | holder | representative
     rep_name: Optional[str] = None
     rep_relationship: Optional[str] = None
     rep_authorized: Optional[bool] = None
@@ -84,6 +85,7 @@ class SessionState(BaseModel):
     memory: IntentMemory = Field(default_factory=IntentMemory)
     candidate_ids: list[str] = Field(default_factory=list)
     selected_id: Optional[str] = None
+    live_polls: dict[str, int] = Field(default_factory=dict)   # record id to the status update last shown
     topics_discussed: list[str] = Field(default_factory=list)
 
     off_topic_strikes: int = 0

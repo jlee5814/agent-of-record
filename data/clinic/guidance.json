@@ -1,0 +1,33 @@
+{
+  "default_guidance": "Upload documents in the Maple Grove patient portal under Documents, or bring them to the front desk. Photos are fine if every corner and all text is readable.",
+  "category_guidance": {
+    "sick_visit": "For a same day sick visit, the front desk needs your insurance on file before the visit is billed.",
+    "physical": "For a physical, preventive care is usually covered in full, but extra tests can carry a cost."
+  },
+  "document_guidance": {
+    "photo of your current insurance card": "Send a photo of the front and back of your current insurance card. The member ID, the group number, and the plan name must be readable."
+  },
+  "document_alternatives": {
+    "default": "If you don't have the document, the front desk can help when you're at the clinic.",
+    "photo of your current insurance card": "If you don't have the card with you, the front desk can look up your plan with your member ID and date of birth."
+  },
+  "followup_settings": {
+    "processing_time": "two to three business days",
+    "human_review_rule": "If the documents aren't available, the front desk reviews your account by hand."
+  },
+  "followup_rules": [
+    {"topic": "missing_document_alternatives", "requires_documents": true,
+     "match_any": ["don't have", "do not have", "left it", "can't find", "forgot"],
+     "text": "If you don't have {documents} with you, the front desk can look up your plan for visit {record_id}."},
+    {"topic": "submission_timing", "requires_documents": true,
+     "match_any": ["how soon", "when do i", "when should", "before the visit", "by when"],
+     "text": "Please send {documents} before you're called back for visit {record_id}, so billing goes to the right plan."},
+    {"topic": "processing_time", "requires_documents": false,
+     "match_any": ["when will the bill", "how long until", "how long does it take", "when will i get"],
+     "text": "Bills usually update in the portal within {processing_time} after insurance responds."},
+    {"topic": "submission_method", "requires_documents": true,
+     "match_any": ["how do i send", "where do i send", "upload", "portal", "email it"],
+     "text": "Upload {documents} in the patient portal under Documents, or hand it to the front desk."}
+  ],
+  "followup_fallback": "I don't have a specific answer for that. The front desk can help, or I can tell you what's on file for this visit."
+}

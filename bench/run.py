@@ -1,7 +1,7 @@
 """Run every scenario against a model server, concurrently.
 
     python -m bench.run --provider offline
-    python -m bench.run --repeats 3 --concurrency 4
+    python -m bench.run --domain clinic --repeats 3 --concurrency 4
     python -m bench.run --extract-mode json_schema --extract-mode prompt
 
 Reports pass rate, server errors, guard interventions, latency per step, time
@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.config import settings  # noqa: E402
 from app.controller import Agent  # noqa: E402
-from app.data import load_store  # noqa: E402
+from app.domain import DOMAINS  # noqa: E402
 from app.llm import make_llm  # noqa: E402
 from app.state import SessionState  # noqa: E402
 from app.summary import Outbox  # noqa: E402
@@ -42,11 +42,11 @@ class Rollout:
     wall_ms: float = 0.0
 
 
-def run_one(llm_factory, label: str, sc: Scenario, rep: int, outbox_dir: Path) -> Rollout:
+def run_one(llm_factory, domain: str, label: str, sc: Scenario, rep: int, outbox_dir: Path) -> Rollout:
     ro = Rollout(label=label, scenario=sc.name, repeat=rep)
     t0 = time.perf_counter()
     try:
-        agent = Agent(llm_factory(), load_store(), outbox=Outbox(outbox_dir))
+        agent = Agent(llm_factory(), domain, outbox=Outbox(outbox_dir))
         s = SessionState()
         s.consent.scenario = sc.consent
         agent.opening(s)
@@ -144,6 +144,7 @@ def main() -> None:
     ap.add_argument("--provider", default=os.getenv("LLM_PROVIDER", "sglang"))
     ap.add_argument("--base-url", default=settings.base_url)
     ap.add_argument("--model", default=settings.model)
+    ap.add_argument("--domain", action="append", choices=DOMAINS, help="freight or clinic; repeat for both (default)")
     ap.add_argument("--extract-mode", action="append", default=[],
                     help="json_schema, json_object, or prompt. Repeat to compare. Default tries each in turn.")
     ap.add_argument("--thinking", action="store_true", help="let Qwen3 think before each reply")
@@ -152,21 +153,25 @@ def main() -> None:
     ap.add_argument("--only", help="comma separated scenario names or tags")
     args = ap.parse_args()
 
-    scenarios = SCENARIOS
-    if args.provider == "offline":
-        scenarios = [sc for sc in scenarios if "live_only" not in sc.tags]
-    if args.only:
-        want = set(args.only.split(","))
-        scenarios = [s for s in SCENARIOS if s.name in want or want & set(s.tags)]
+    def pick(domain: str) -> list[Scenario]:
+        scenarios = SCENARIOS[domain]
+        if args.provider == "offline":
+            scenarios = [sc for sc in scenarios if "live_only" not in sc.tags]
+        if args.only:
+            want = set(args.only.split(","))
+            scenarios = [sc for sc in scenarios if sc.name in want or want & set(sc.tags)]
+        return scenarios
 
     out_dir = Path(__file__).resolve().parent / "results"
     out_dir.mkdir(exist_ok=True)
     results = []
-    for mode in (args.extract_mode or [""]):
+    runs = [(d, m) for d in (args.domain or list(DOMAINS)) for m in (args.extract_mode or [""])]
+    for domain, mode in runs:
         # Build one client up front: it fails fast if the server is down and resolves the model name.
         probe = make_llm(args.provider, args.model, args.base_url, mode, os.getenv("OPENAI_API_KEY"), args.thinking)
         model = getattr(probe, "model", "rules")
-        label = f"{model} [{mode or 'auto'}]" if args.provider != "offline" else "rules"
+        label = f"{domain} {model} [{mode or 'auto'}]" if args.provider != "offline" else f"{domain} rules"
+        scenarios = pick(domain)
 
         def factory(mode=mode, model=model):
             return make_llm(args.provider, model, args.base_url, mode, os.getenv("OPENAI_API_KEY"), args.thinking)
@@ -175,7 +180,7 @@ def main() -> None:
         t0 = time.perf_counter()
         rollouts: list[Rollout] = []
         with ThreadPoolExecutor(max_workers=args.concurrency) as pool:
-            futs = [pool.submit(run_one, factory, label, sc, rep, out_dir / "outbox") for sc, rep in jobs]
+            futs = [pool.submit(run_one, factory, domain, label, sc, rep, out_dir / "outbox") for sc, rep in jobs]
             for f in as_completed(futs):
                 rollouts.append(f.result())
         summary = summarize(label, rollouts, time.perf_counter() - t0)

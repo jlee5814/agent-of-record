@@ -1,0 +1,14 @@
+[
+  {"party_id": "D1", "name": "Tony Alvarez", "name_aliases": [], "account_number": "DRV-2201",
+   "dob": "1981-09-14", "id_last4": "4417", "phone": "+17065550132", "phone_aliases": [],
+   "email": "t.alvarez@example.com", "email_aliases": []},
+  {"party_id": "D2", "name": "Keisha Brooks", "name_aliases": [], "account_number": "DRV-3318",
+   "dob": "1990-02-27", "id_last4": "9082", "phone": "+17065550178", "phone_aliases": [],
+   "email": "keisha.brooks@example.net", "email_aliases": []},
+  {"party_id": "D3", "name": "Andrzej Nowak", "name_aliases": ["Andre Nowak", "Andrew Novak"], "account_number": "DRV-4470",
+   "dob": "1975-12-05", "id_last4": "3365", "phone": "+17065550133", "phone_aliases": [],
+   "email": "a.nowak@example.org", "email_aliases": ["andre.nowak@example.org"]},
+  {"party_id": "D4", "name": "Sam Whitfield", "name_aliases": [], "account_number": "DRV-5012",
+   "dob": "1996-06-21", "id_last4": "7720", "phone": "+17065550190", "phone_aliases": [],
+   "email": "sam.whitfield@example.com", "email_aliases": []}
+]

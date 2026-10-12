@@ -1,0 +1,40 @@
+[
+  {"record_id": "APT-5521", "party_id": "P1", "counterparty": "Dr. Anita Patel", "location": "Maple Grove Family Clinic",
+   "category": "sick_visit", "date": "2026-03-10", "status": "checked_in",
+   "summary": "Same day sick visit.",
+   "scheduled_time": "14:30", "check_in_time": "14:20", "copay_estimate": "40.00", "bill": null,
+   "documents_needed": ["photo of your current insurance card"], "deadline": null,
+   "live": [
+     {"status": "checked_in", "position": 3, "est_minutes": 35, "note": "Dr. Patel is running about 25 minutes behind after an urgent walk in."},
+     {"status": "checked_in", "position": 2, "est_minutes": 20, "note": "Two patients are ahead."},
+     {"status": "checked_in", "position": 1, "est_minutes": 10, "note": "Next in line. A nurse will call the patient back shortly."},
+     {"status": "roomed", "position": 0, "est_minutes": 5, "note": "Exam room 4. Dr. Patel will be in shortly."}
+   ]},
+  {"record_id": "APT-5390", "party_id": "P1", "counterparty": "Dr. Anita Patel", "location": "Maple Grove Family Clinic",
+   "category": "follow_up", "date": "2026-02-18", "status": "completed",
+   "summary": "Follow up visit.",
+   "scheduled_time": "10:00", "check_in_time": "09:55", "copay_estimate": "40.00",
+   "bill": {"billed": "210.00", "insurance_paid": "150.00", "patient_owes": "60.00",
+            "reason": "the visit was billed as an extended follow up, so the $40.00 copay plus $20.00 of coinsurance applied"},
+   "documents_needed": [], "deadline": null, "live": []},
+  {"record_id": "APT-5602", "party_id": "P1", "counterparty": "Dr. Marcus Lee", "location": "Maple Grove Family Clinic",
+   "category": "physical", "date": "2026-03-24", "status": "scheduled",
+   "summary": "Annual physical.",
+   "scheduled_time": "09:00", "check_in_time": null, "copay_estimate": "0.00", "bill": null,
+   "documents_needed": [], "deadline": null, "live": []},
+  {"record_id": "APT-6010", "party_id": "P2", "counterparty": "Dr. Marcus Lee", "location": "Maple Grove Family Clinic",
+   "category": "follow_up", "date": "2026-03-10", "status": "checked_in",
+   "summary": "Follow up visit.",
+   "scheduled_time": "15:00", "check_in_time": "14:45", "copay_estimate": "25.00", "bill": null,
+   "documents_needed": [], "deadline": null,
+   "live": [
+     {"status": "checked_in", "position": 2, "est_minutes": 25, "note": "Dr. Lee is about 10 minutes behind."},
+     {"status": "checked_in", "position": 1, "est_minutes": 10, "note": "One patient is ahead."}
+   ]},
+  {"record_id": "APT-6122", "party_id": "P3", "counterparty": "Dr. Anita Patel", "location": "Maple Grove Family Clinic",
+   "category": "lab_work", "date": "2026-03-06", "status": "completed",
+   "summary": "Lab draw.",
+   "scheduled_time": "08:15", "check_in_time": "08:10", "copay_estimate": "0.00",
+   "bill": {"billed": "95.00", "insurance_paid": "95.00", "patient_owes": "0.00", "reason": "the plan covers this lab in full"},
+   "documents_needed": [], "deadline": null, "live": []}
+]

@@ -9,18 +9,16 @@ import calendar
 import json
 import re
 import time
+from datetime import date
 
 from .llm import CallStats, LLMResult
 
 MONTHS = {m.lower(): i for i, m in enumerate(calendar.month_name) if m}
 MONTHS.update({m.lower(): i for i, m in enumerate(calendar.month_abbr) if m})
 
-IN_SCOPE = re.compile(
-    r"\b(disput\w*|charge\w*|card|account|merchant|refund\w*|credit\w*|deni\w*|document\w*|receipt|order|"
-    r"email|verif\w*|dob|birth\w*|name|phone|deadline|human|person|agent|supervisor|status|submit\w*|"
-    r"upload\w*|app|summary|send|skip|husband|wife|spouse|mother|father|calling|consent|fraud|transaction|"
-    r"statement|bluewater|parking|airline|flight|grocery|money|back)\b",
-    re.I)
+IN_SCOPE_COMMON = (r"email|verif\w*|dob|birth\w*|name|phone|human|person|agent|supervisor|status|submit\w*|"
+                   r"upload\w*|summary|send|skip|calling|consent|money|paperwork|document\w*|wife|husband|father|"
+                   r"mother|daughter|son")
 GREETING = re.compile(r"^\s*(hi|hello|hey|good (morning|afternoon|evening)|thanks|thank you|ok|okay)\b[\s!.]*$", re.I)
 NAME = r"([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})"
 
@@ -30,20 +28,21 @@ def _first(pattern: str, text: str, flags=0):
     return m.group(1) if m else None
 
 
-def heuristic_extract(text: str, phase: str, last_agent: str = "") -> dict:
+def heuristic_extract(text: str, phase: str, last_agent: str, domain, today: date) -> dict:
     t = text.strip()
     tl = t.lower()
     out: dict = {}
 
     # ---- identity
     out["email"] = _first(r"([\w.+-]+@[\w-]+\.[\w.]+)", t)
-    out["account_number"] = _first(r"\b(ACC-?\s?\d{4,})\b", t, re.I)
+    out["account_number"] = _first(r"\b((?:DRV|MRN)-?\s?\d{4,})\b", t, re.I)
     iso = _first(r"\b((?:19|20)\d{2}-\d{2}-\d{2})\b", t)
     slash = _first(r"\b(\d{1,2}/\d{1,2}/(?:19|20)\d{2})\b", t)
     words = _first(r"\b((?:%s)\s+\d{1,2}(?:st|nd|rd|th)?,?\s+(?:19|20)\d{2})\b" % "|".join(
         m for m in MONTHS if len(m) > 3), t, re.I)
     out["dob"] = iso or slash or words
-    out["card_last4"] = _first(r"(?:card|last\s*(?:four|4)(?:\s*digits)?|ending(?:\s+in)?)[^0-9]{0,25}(\d{4})\b", t, re.I)
+    out["id_last4"] = _first(r"(?:cdl|member id|insurance id|insurance|last\s*(?:four|4)(?:\s*digits)?|ends? in|"
+                             r"ending(?:\s+in)?)[^0-9]{0,25}(\d{4})\b", t, re.I)
     phone = _first(r"(\+?1?[\s.(-]*\d{3}[\s.)-]*\d{3}[\s.-]*\d{4})\b", t)
     if phone and len(re.sub(r"\D", "", phone)) in (10, 11):
         out["phone"] = phone.strip()
@@ -54,61 +53,29 @@ def heuristic_extract(text: str, phase: str, last_agent: str = "") -> dict:
         out["caller_role"] = "representative"
         out["rep_name"], out["relationship"], out["full_name"] = rep.group(1), rep.group(2), rep.group(3)
     else:
-        out["full_name"] = _first(r"(?i:my name is|name's|this is|i'?m|i am|name is)\s+" + NAME, t)
-        if re.search(r"\b(cardholder|my card|my dispute|my account)\b", tl):
-            out["caller_role"] = "cardholder"
+        out["full_name"] = (_first(r"(?i:my name is|name's|this is|i'?m|i am|name is)\s+" + NAME, t)
+                            or _first(r"^(?:hi,?\s+|hey,?\s+)?" + NAME + r",\s+(?i:dob|born|date of birth)", t))
 
-    # ---- dispute hints
-    out["dispute_id"] = _first(r"\b(DSP-?\s?\d{3,})\b", t, re.I)
-    for merchant in ("bluewater", "parking", "northgate", "grocery", "skyline", "airline", "corner cafe"):
-        if merchant in tl:
-            out["merchant"] = merchant
-            break
-    if re.search(r"never (arrived|came|showed)|didn'?t (arrive|show up)|not received|never got", tl):
-        out["reason"] = "item_not_received"
-    elif re.search(r"charged twice|double charged|duplicate", tl):
-        out["reason"] = "duplicate_charge"
-    elif re.search(r"\b(cancell?ed flight|flight was cancell?ed|never happened)\b", tl):
-        out["reason"] = "service_not_provided"
-    elif re.search(r"wrong amount|charged more|overcharged", tl):
-        out["reason"] = "wrong_amount"
-    elif re.search(r"\b(fraud|didn'?t make|not my charge|unauthori[sz]ed)\b", tl):
-        out["reason"] = "fraud"
-    if re.search(r"\b(denied|rejected|lost)\b", tl):
-        out["dispute_status"] = "denied"
-    elif re.search(r"\b(won|credited|refunded)\b", tl):
-        out["dispute_status"] = "credited"
-    elif re.search(r"\b(open|pending|in progress|under review)\b", tl):
-        out["dispute_status"] = "open"
+    # ---- which record, and what they want
+    out.update(domain.offline_hints(t, tl, phase, today))
     for name, num in MONTHS.items():
         if re.search(rf"\b(from|in|since|back in|of|on)\s+{name}\b", tl):
             out["month"] = num
             break
-    yr = _first(r"\b(20\d{2})\b", t)
-    if yr and not (out.get("dob") and yr in out["dob"]):
-        out["year"] = int(yr)
-
-    if re.search(r"\bwhy\b.*\b(denied|rejected|lost)\b|\b(denied|rejected|lost)\b.*\bwhy\b", tl):
-        out["intent"] = "decision_question"
-    elif re.search(r"\b(submit|upload|send|format|pdf|screenshot|photo)\b", tl) and phase == "PROCESS_CASE":
-        out["intent"] = "document_submission"
-    elif re.search(r"\bstatus\b|what'?s happening|where (is|are) (it|things)", tl):
-        out["intent"] = "status_inquiry"
-    elif re.search(r"\b(money back|refund|credit|keep the|get the)\b", tl):
-        out["intent"] = "credit_question"
-    elif out.get("dispute_status") == "denied":
-        out["intent"] = "decision_question"
-    elif "calling about" in tl or "asking about" in tl:
-        out["intent"] = "general_dispute_question"
     if "?" in t:
         out["question"] = t[:120]
+    if re.search(domain.re_restricted, tl):
+        out["restricted_request"] = True
+    if re.search(domain.re_emergency, tl):
+        out["emergency"] = True
 
     # ---- signals
-    if any(out.get(k) for k in ("full_name", "dob", "phone", "email", "card_last4", "account_number", "dispute_id")):
+    in_scope = re.compile(rf"\b({IN_SCOPE_COMMON}|{domain.in_scope_words})\b", re.I)
+    if any(out.get(k) for k in ("full_name", "dob", "phone", "email", "id_last4", "account_number", "record_id")):
         out["scope"] = "in_scope"
     elif GREETING.match(t):
         out["scope"] = "smalltalk"
-    elif IN_SCOPE.search(t):
+    elif in_scope.search(t):
         out["scope"] = "in_scope"
     elif "?" in t or re.search(r"^(what|who|whom|where|when|how|why|tell me|write|explain|can you|could you|"
                                r"give me|recommend|define)\b", tl):
@@ -152,13 +119,24 @@ def heuristic_extract(text: str, phase: str, last_agent: str = "") -> dict:
 class OfflineLLM:
     name = "offline:rules"
 
+    def __init__(self, domain: str | None = None):
+        self.domain_key = domain
+
+    def _domain(self, system: str):
+        from .domain import DOMAINS, get_domain
+        if self.domain_key:
+            return get_domain(self.domain_key)
+        # No domain given: the extraction prompt names the organization.
+        return next((get_domain(k) for k in DOMAINS if get_domain(k).org in system), get_domain(DOMAINS[0]))
+
     def extract(self, system: str, user: str, schema: dict, tool_name: str) -> LLMResult:
         t0 = time.perf_counter()
         phase = _first(r'"current_phase":\s*"(\w+)"', user) or "VERIFY_ID"
+        today = date.fromisoformat(_first(r'"today":\s*"(\d{4}-\d{2}-\d{2})', user) or "2026-03-10")
         latest = user.split("LATEST CALLER MESSAGE:\n", 1)[-1]
         convo = user.split("Recent conversation:\n", 1)[-1].split("\n\nLATEST CALLER MESSAGE", 1)[0]
         agent_lines = [ln for ln in convo.splitlines() if ln.startswith("ASSISTANT:")]
-        value = heuristic_extract(latest, phase, agent_lines[-1] if agent_lines else "")
+        value = heuristic_extract(latest, phase, agent_lines[-1] if agent_lines else "", self._domain(system), today)
         return LLMResult(value, CallStats("extract", "offline", (time.perf_counter() - t0) * 1000, mode="rules"))
 
     def generate(self, system: str, user: str, max_tokens: int = 400) -> LLMResult:

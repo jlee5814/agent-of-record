@@ -1,0 +1,14 @@
+[
+  {"party_id": "P1", "name": "Hannah Kim", "name_aliases": [], "account_number": "MRN-10482",
+   "dob": "1988-07-19", "id_last4": "5530", "phone": "+16785550121", "phone_aliases": [],
+   "email": "hannah.kim@example.com", "email_aliases": []},
+  {"party_id": "P2", "name": "Robert Ellison", "name_aliases": ["Bob Ellison"], "account_number": "MRN-20317",
+   "dob": "1954-03-08", "id_last4": "2291", "phone": "+16785550164", "phone_aliases": [],
+   "email": "r.ellison@example.net", "email_aliases": []},
+  {"party_id": "P3", "name": "Nguyen Thi Lan", "name_aliases": ["Lan Nguyen"], "account_number": "MRN-30955",
+   "dob": "1979-10-02", "id_last4": "8104", "phone": "+16785550122", "phone_aliases": [],
+   "email": "lan.nguyen@example.org", "email_aliases": ["nguyen.lan@example.org"]},
+  {"party_id": "P4", "name": "Owen Price", "name_aliases": [], "account_number": "MRN-41120",
+   "dob": "1999-01-15", "id_last4": "6677", "phone": "+16785550188", "phone_aliases": [],
+   "email": "owen.price@example.com", "email_aliases": []}
+]

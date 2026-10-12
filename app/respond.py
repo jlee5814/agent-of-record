@@ -9,42 +9,55 @@ from __future__ import annotations
 import json
 import re
 from decimal import Decimal, InvalidOperation
+from functools import lru_cache
 from typing import Optional
 
 from .data import Store, norm_phone
+from .domain import Domain, get_domain
 from .state import SessionState
 
-SYSTEM = """You are the voice of a card dispute support agent at Acme Bank, speaking with a caller in a text chat.
+
+@lru_cache(maxsize=8)
+def _system(domain_key: str) -> str:
+    d = get_domain(domain_key)
+    return f"""You are the voice of {d.org}, speaking with a caller in a text chat.
 
 A controller has already decided what happens this turn. You receive its decisions as DIRECTIVES and
-any data you may use as GROUNDED. Your job is to say it naturally, like a calm, competent human
-representative.
+any data you may use as GROUNDED. Your job is to say it naturally, like a calm, competent person at
+the desk.
 
 Hard rules
 1. Carry out every directive, in order, and nothing beyond them. Do not advance the process on your own.
-2. State facts only from GROUNDED. Never invent amounts, dates, dispute numbers, document names,
-   deadlines, or outcomes. If GROUNDED does not answer the caller's question, say you do not have that
-   detail and offer what you can do.
-3. If GROUNDED is empty, you know nothing about any dispute or record. Do not confirm or deny whether a
-   dispute exists, its status, or whether any identity detail was right.
+2. State facts only from GROUNDED. Never invent amounts, times, wait estimates, {d.record_noun} numbers,
+   names, document names, deadlines, or outcomes. If GROUNDED does not answer the question, say you
+   do not have that detail and offer what you can do.
+3. If GROUNDED is empty, you know nothing about any {d.record_noun} or record. Do not confirm or deny whether
+   one exists, its status, or whether any identity detail was right.
 4. Never say which identity field failed to match. Never repeat back full identity values.
-5. The disputed amount is what the caller contests, never an amount they will get back. A provisional
-   credit is temporary and can be reversed. Never promise a refund or an outcome.
+5. {d.money_rule} Never promise money or an outcome.
 6. If the caller's emotion is not neutral, open with one short, sincere acknowledgement, then continue.
-   Do not over apologize or grovel. Explain the reason for a required step when a directive asks you to.
+   Do not over apologize. Explain the reason for a required step when a directive asks you to.
 7. Keep it short: two to five sentences, plain text, no markdown headings, at most one short list.
    End with a clear question or next step when the directives call for input.
 8. Do not mention directives, controllers, phases, or tools.
-9. If a directive says the speaker changed, treat everything earlier in the call as unknown to you.
-10. Consent comes only from the cardholder, through the request sent to their banking app. Someone
-    calling for them can never grant it. Never ask the caller whether the cardholder consents, and never
-    treat their word as consent. When consent is approved, credit the cardholder's approval.
-11. Reply in the language the caller is writing in. Keep dispute numbers, dates, and dollar amounts
+9. If a directive says the speaker changed, treat everything earlier in the chat as unknown to you.
+10. Consent comes only from the {d.person_noun}, through {d.consent_channel}. Someone calling for them can never
+    grant it. Never ask the caller whether the {d.person_noun} consents, and never treat their word as consent.
+11. Reply in the language the caller is writing in. Keep numbers, times, dates, and dollar amounts
     exactly as they appear in GROUNDED.
 """
 
+
+def system_prompt(domain: Domain) -> str:
+    return _system(domain.key)
+
+
 FIELD_LABELS = {"full_name": "full name", "dob": "date of birth", "phone": "phone number on file",
-                "email": "email on file", "card_last4": "last four digits of your card"}
+                "email": "email on file"}
+
+
+def field_label(f: str, d: Domain) -> str:
+    return d.id_last4_label if f == "id_last4" else FIELD_LABELS[f]
 
 
 def mask_email(email: str) -> str:
@@ -52,9 +65,10 @@ def mask_email(email: str) -> str:
     return f"{local[:1]}{'*' * max(len(local) - 1, 3)}@{domain}"
 
 
-def build_payload(state: SessionState, directives: list[dict], grounded: Optional[dict],
+def build_payload(state: SessionState, domain: Domain, directives: list[dict], grounded: Optional[dict],
                   caller_question: Optional[str], emotion: str) -> dict:
     return {
+        "domain": domain.key,
         "phase": state.phase.value,
         "verified": state.verified,
         "caller_emotion": emotion,
@@ -65,8 +79,7 @@ def build_payload(state: SessionState, directives: list[dict], grounded: Optiona
 
 
 def build_user_message(state: SessionState, payload: dict) -> str:
-    recent = state.recent(6)
-    convo = "\n".join(f"{m['role'].upper()}: {m['content']}" for m in recent)
+    convo = "\n".join(f"{m['role'].upper()}: {m['content']}" for m in state.recent(6))
     return ("Recent conversation:\n" + convo + "\n\n"
             "Write the agent's next message.\n\nPAYLOAD_JSON:\n" + json.dumps(payload, indent=1))
 
@@ -80,145 +93,130 @@ def _join(items: list[str]) -> str:
     return ", ".join(items[:-1]) + f" and {items[-1]}"
 
 
-def _answer_dispute(g: dict, intent: Optional[str]) -> str:
-    d = g.get("dispute") or {}
-    if not d:
+def _answer(g: dict, intent: Optional[str], d: Domain) -> str:
+    rec = g.get("record") or {}
+    if not rec:
         return ""
-    facts = d.get("facts", [])
     follow = g.get("followup")
     if follow and follow.get("topic") != "fallback":
         return follow["text"]
-    if d.get("status") == "resolved_denied" and intent in (None, "decision_question", "general_dispute_question",
-                                                           "status_inquiry", "credit_question"):
-        return (f"Dispute {d['dispute_id']} with {d['merchant']} was decided for the merchant because "
-                f"{d['decision_reason']}. No credit was issued.")
-    if d.get("status") == "needs_info" and intent in (None, "status_inquiry", "next_steps", "general_dispute_question",
-                                                      "document_submission"):
-        parts = [f"Dispute {d['dispute_id']} with {d['merchant']} is waiting on documents from you."]
-        docs = _join(d.get("documents_needed", []))
-        if docs:
-            parts.append(f"To move it forward, please send the {docs}.")
-        dl = d.get("deadline")
-        if dl and not dl["expired"]:
-            parts.append(f"They're due by {dl['date']}.")
-        elif dl and dl["expired"]:
-            parts.append(f"The deadline was {dl['date']}, so a dispute specialist will need to review a late submission.")
-        return " ".join(parts)
-    if intent == "credit_question":
-        return " ".join(f for f in facts if "$" in f) or " ".join(facts[:2])
-    if follow:
-        return " ".join(facts[:2]) + " " + follow["text"]
-    return " ".join(facts[:3])
+    return d.answer(rec, intent)
 
 
 def render_template(payload: dict) -> str:
     """Word the directives with fixed templates. Used offline and when the guard blocks a reply."""
+    d = get_domain(payload.get("domain", "freight"))
     g = payload.get("grounded") or {}
+    noun, person = d.record_noun, d.person_noun
     out: list[str] = []
-    for d in payload.get("directives", []):
-        a = d["action"]
-        if a == "empathize":
+    for x in payload.get("directives", []):
+        a = x["action"]
+        if a == "emergency":
+            out.append(d.emergency_reply)
+        elif a == "empathize":
             out.append({
                 "frustrated": "I understand this is frustrating, and I'm sorry for the hassle.",
                 "angry": "I hear you, and I'm sorry this has been so difficult.",
-                "anxious": "I understand this is stressful. I'll walk you through it step by step.",
+                "anxious": "I understand this is stressful. I'll walk you through it.",
                 "confused": "No problem, let me explain.",
                 "refusing": "I understand your hesitation.",
-            }.get(d.get("emotion"), "I understand."))
+            }.get(x.get("emotion"), "I understand."))
         elif a == "identity_changed":
-            out.append("Since I'm now speaking with someone new, I need to verify the caller again before discussing any dispute.")
+            out.append(f"Since I'm now speaking with someone new, I need to verify the caller again before discussing any {noun}.")
         elif a == "greet_back":
             out.append("Hello, thanks for reaching out.")
         elif a == "off_topic":
-            s = "I'm sorry, I can only help with your card disputes."
-            if d.get("offer_human"):
-                s += " If you need help with something else, I can transfer you to a person. Would you like that?"
+            s = f"I'm sorry, I can only help with your {noun}s here."
+            if x.get("offer_human"):
+                s += f" If you need something else, I can transfer you to {d.team}. Would you like that?"
             out.append(s)
+        elif a == "restricted":
+            out.append(d.restricted_reply)
         elif a == "noted_hint":
-            out.append("I've noted what you're calling about, and I'll pull it up once you're verified.")
+            out.append("I've noted what you're asking about, and I'll pull it up once you're verified.")
         elif a == "ask_identity":
-            missing = [FIELD_LABELS[f] for f in d.get("missing", [])]
-            n = d.get("needed", 0)
-            explained = any(x["action"] == "explain_verification" for x in payload.get("directives", []))
-            if explained and d.get("have", 0) == 0:
+            missing = [field_label(f, d) for f in x.get("missing", [])]
+            n = x.get("needed", 0)
+            explained = any(y["action"] == "explain_verification" for y in payload.get("directives", []))
+            if explained and x.get("have", 0) == 0:
                 out.append("Could you share three of those details?")
-            elif d.get("have", 0) == 0:
-                out.append("Before I can discuss any dispute, I need to verify your identity. Please share at least "
+            elif x.get("have", 0) == 0:
+                out.append(f"Before I can discuss any {noun}, I need to verify your identity. Please share at least "
                            f"three of the following: {_join(missing)}.")
             else:
                 out.append(f"Thank you. I need {n} more detail{'s' if n != 1 else ''} to verify your identity. "
                            f"You can give me your {_join(missing)}.")
         elif a == "verify_failed":
-            left = d.get("attempts_left", 0)
+            left = x.get("attempts_left", 0)
             out.append("I wasn't able to verify your identity with those details. Could you check them and try again? "
-                       f"You have {left} more attempt{'s' if left != 1 else ''}, or I can transfer you to a person.")
+                       f"You have {left} more attempt{'s' if left != 1 else ''}, or I can transfer you to {d.team}.")
         elif a == "explain_verification":
-            out.append("Dispute details are private account information, so I have to confirm I'm speaking with the "
-                       "cardholder or someone they've authorized before sharing anything. Any three of your full name, "
-                       "date of birth, phone number, email, or the last four digits of your card will do.")
+            labels = _join([field_label(f, d) for f in ("full_name", "dob", "phone", "email", "id_last4")]).replace(" and ", " or ")
+            out.append(f"{d.privacy_reason}, so I have to confirm I'm speaking with the {person} or someone they've "
+                       f"authorized before sharing anything. Any three of your {labels} will do.")
         elif a == "ask_rep_identity":
-            out.append("Since you're calling for someone else, could you tell me your full name and how you're related to the cardholder?")
+            out.append(f"Since you're calling for someone else, could you tell me your full name and how you're related to the {person}?")
         elif a == "rep_not_authorized":
-            out.append("I'm sorry, but I don't see you listed as an authorized user on this account, so I can't share "
-                       "dispute details. The cardholder can contact us directly or add you, or I can transfer you to a person.")
+            out.append(f"I'm sorry, but I don't see you listed as an authorized contact, so I can't share details. "
+                       f"The {person} can contact us directly or add you, or I can transfer you to {d.team}.")
         elif a == "consent_requested":
-            out.append("Thank you. You're listed as an authorized user. As a last step, I've sent a consent request to the "
-                       "cardholder's banking app. Once they approve it, I can share the dispute details.")
+            out.append(f"Thank you. You're listed as an authorized contact. As a last step, I've sent a consent request "
+                       f"to the {person} through {d.consent_channel}. Once they approve it, I can share details.")
         elif a == "consent_pending":
-            out.append("The consent request is still pending. Once the cardholder approves it in their app, I can continue.")
+            out.append(f"The consent request is still pending. Once the {person} approves it in {d.consent_channel}, I can continue.")
         elif a == "consent_approved":
-            out.append("The cardholder approved the request in their app. Thanks for waiting.")
+            out.append(f"The {person} approved the request in {d.consent_channel}. Thanks for waiting.")
         elif a == "consent_timeout":
-            out.append("The cardholder hasn't approved the consent request, so I can't share dispute details today. "
-                       "I'll transfer you to a person who can help with other options.")
+            out.append(f"The {person} hasn't approved the consent request, so I can't share details today. "
+                       f"I'll transfer you to {d.team}, who can help with other options.")
         elif a == "verified":
             out.append("Thank you, you're verified.")
-        elif a == "dispute_selected":
-            out.append(f"I found the dispute you mentioned: {d['label']}.")
+        elif a == "record_selected":
+            out.append(f"I found the {noun}: {x['label']}.")
         elif a == "ask_disambiguate":
-            opts = d.get("options", [])
-            out.append("I see more than one dispute that could match. Which one are you asking about?\n" +
-                       "\n".join(f"- {o}" for o in opts))
+            out.append(f"I see more than one {noun} that could match. Which one do you mean?\n" +
+                       "\n".join(f"- {o}" for o in x.get("options", [])))
         elif a == "no_match":
-            opts = d.get("options", [])
-            out.append("I couldn't find a dispute matching that. Here's what I have on file:\n" +
-                       "\n".join(f"- {o}" for o in opts) + "\nWhich one would you like to discuss?")
-        elif a == "no_disputes":
-            out.append("I don't see any disputes on your account. Is there something else I can help with?")
-        elif a == "ask_dispute_question":
+            out.append(f"I couldn't find a {noun} matching that. Here's what I have on file:\n" +
+                       "\n".join(f"- {o}" for o in x.get("options", [])) + "\nWhich one would you like to discuss?")
+        elif a == "no_records":
+            out.append(f"I don't see any {noun}s on file for you. Is there something else I can help with?")
+        elif a == "ask_record_question":
             out.append("What would you like to know about it?")
-        elif a == "answer_dispute":
-            ans = _answer_dispute(g, d.get("intent"))
-            out.append(ans or "I don't have that detail on file, but I can tell you the dispute's status and what's needed next.")
+        elif a == "answer_record":
+            ans = _answer(g, x.get("intent"), d)
+            out.append(ans or f"I don't have that detail on file, but I can tell you this {noun}'s status and what's next.")
         elif a == "deadline_passed":
-            out.append("Because the deadline has passed, a dispute specialist should review a late submission. Would you like me to transfer you?")
+            out.append(f"Because the deadline has passed, {d.team} should review a late submission. Would you like me to transfer you?")
         elif a == "anything_else":
-            out.append("Is there anything else I can help you with on this dispute?")
+            out.append(f"Is there anything else I can help you with on this {noun}?")
         elif a == "offer_email":
-            out.append(f"Would you like me to email a summary of today's chat, including the dispute status and next steps, "
-                       f"to {d.get('email_masked', 'the email on file')}? You can also skip it.")
+            out.append(f"Would you like me to email a summary of today's chat to {x.get('email_masked', 'the email on file')}? "
+                       "You can also skip it.")
         elif a == "email_sent":
-            out.append(f"Done. I've sent the summary to {d.get('email_masked')}. Thanks for reaching out, and take care.")
+            out.append(f"Done. I've sent the summary to {x.get('email_masked')}. Thanks for reaching out, and take care.")
         elif a == "email_skipped":
             out.append("No problem, I won't send an email. Thanks for reaching out, and take care.")
         elif a == "offer_human":
-            out.append("Would you like me to transfer you to a person?")
+            out.append(f"Would you like me to transfer you to {d.team}?")
         elif a == "handoff":
-            out.append("I'm transferring you to a person now. I've passed along a summary so you won't have to repeat yourself.")
+            out.append(f"I'm transferring you to {d.team} now. I've passed along a summary so you won't have to repeat yourself.")
         elif a == "handoff_declined":
             out.append("Okay, we'll keep going here.")
         elif a == "ended":
             out.append("This chat has ended. Please start a new one if you need anything else.")
-    return " ".join(x for x in out if x).replace(" \n", "\n")
+    return " ".join(y for y in out if y).replace(" \n", "\n")
+
 
 # -------------------------------------------------------------- output guard
 
-_DISPUTE_ID = re.compile(r"\bDSP-?\s?\d{3,}\b", re.I)
 _MONEY = re.compile(r"\$\s?\d[\d,]*(?:\.\d{2})?")
+_CLOCK = re.compile(r"\b(\d{1,2}):(\d{2})\s*([ap])?\.?\s*m?\.?\b", re.I)
+_DURATION = re.compile(r"\b(\d+(?:\.\d+)?)\s*(?:more\s+|extra\s+)?(minutes?|mins?|hours?|hrs?)\b", re.I)
 
 
 def _norm_money(s: str) -> str:
-    """Normalize an amount to cents so $1,249 and $1,249.00 match."""
+    """Normalize an amount to cents so $45 and $45.00 match."""
     digits = re.sub(r"[^\d.]", "", s).rstrip(".")
     try:
         return str(Decimal(digits).quantize(Decimal("0.01")))
@@ -226,29 +224,40 @@ def _norm_money(s: str) -> str:
         return digits
 
 
-def guard(reply: str, state: SessionState, store: Store, grounded: Optional[dict],
+def _clocks(text: str) -> set[tuple[int, int]]:
+    """2:30 PM, 2:30pm, and 14:30 all become (2, 30)."""
+    return {(int(h) % 12, int(m)) for h, m, _ in _CLOCK.findall(text)}
+
+
+def _minutes(text: str) -> set[float]:
+    """Durations in minutes, so 2 hours and 120 minutes match."""
+    out = set()
+    for n, unit in _DURATION.findall(text):
+        v = float(n)
+        out.add(v * 60 if unit.lower().startswith("h") else v)
+    return out
+
+
+def guard(reply: str, state: SessionState, store: Store, domain: Domain, grounded: Optional[dict],
           user_texts: list[str]) -> list[str]:
     """List what a reply says that the phase doesn't allow. Empty means send it."""
     problems: list[str] = []
-    said = " ".join(user_texts).lower()
+    said = " ".join(user_texts)
+    said_low = said.lower()
     said_digits = re.sub(r"\D", "", said)
+    low = reply.lower()
 
     if not state.verified:
-        low = reply.lower()
-        if _DISPUTE_ID.search(reply):
-            problems.append("dispute id before verification")
+        if domain.id_regex.search(reply):
+            problems.append(f"{domain.record_noun} id before verification")
         if _MONEY.search(reply):
             problems.append("amount before verification")
-        for d in store.disputes:
-            if d.decision_reason and d.decision_reason.lower()[:40] in low:
-                problems.append("decision reason before verification")
-            for doc in d.documents_needed:
-                if doc.lower() in low and doc.lower() not in said:
-                    problems.append("required document before verification")
-            if d.merchant.lower() in low and d.merchant.lower() not in said:
-                problems.append("merchant before verification")
-        for p in store.cardholders:
-            if p.email.lower() in low and p.email.lower() not in said:
+        for r in store.records:
+            for term in [*domain.private_terms(r), *r.documents_needed]:
+                if term and term.lower() in low and term.lower() not in said_low:
+                    problems.append(f"record detail before verification: {term}")
+        for p in store.people:
+            if p.email.lower() in low and p.email.lower() not in said_low:
                 problems.append("record email echoed")
             ph = norm_phone(p.phone) or ""
             if ph and ph[-10:] in re.sub(r"\D", "", reply) and ph[-10:] not in said_digits:
@@ -257,14 +266,20 @@ def guard(reply: str, state: SessionState, store: Store, grounded: Optional[dict
                 problems.append("record dob echoed")
         return sorted(set(problems))
 
-    # Verified: every dispute ID and amount must be grounded.
-    own = {d.dispute_id for d in store.disputes_for(state.verified_party_id or "")}
-    for m in _DISPUTE_ID.findall(reply):
-        did = "DSP-" + re.sub(r"\D", "", m)
-        if did not in own:
-            problems.append(f"ungrounded dispute id {did}")
-    allowed = {_norm_money(m) for m in _MONEY.findall(json.dumps(grounded or {}))}
+    # Verified: every ID, amount, clock time, and duration must be grounded or said by the caller.
+    own = {r.record_id for r in store.records_for(state.verified_party_id or "")}
+    for m in domain.id_regex.findall(reply):
+        rid = f"{domain.id_prefix}-" + re.sub(r"\D", "", m)
+        if rid not in own:
+            problems.append(f"ungrounded {domain.record_noun} id {rid}")
+    blob = json.dumps(grounded or {}) + " " + said
+    allowed_money = {_norm_money(m) for m in _MONEY.findall(blob)}
     for m in _MONEY.findall(reply):
-        if _norm_money(m) not in allowed:
+        if _norm_money(m) not in allowed_money:
             problems.append(f"ungrounded amount {m}")
+    allowed_clocks, allowed_minutes = _clocks(blob), _minutes(blob)
+    for c in _clocks(reply) - allowed_clocks:
+        problems.append(f"ungrounded time {c[0] or 12}:{c[1]:02d}")
+    for v in _minutes(reply) - allowed_minutes:
+        problems.append(f"ungrounded duration {v:g} minutes")
     return sorted(set(problems))

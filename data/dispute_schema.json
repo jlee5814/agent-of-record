@@ -1,8 +1,0 @@
-{
-  "notes": ["Field meanings for Acme Bank dispute records. Amounts are USD decimal strings."],
-  "fields": {
-    "disputed_amount": "The amount the cardholder is contesting. Not a promise of any credit.",
-    "provisional_credit": "A temporary credit posted while the dispute is reviewed. The bank can reverse it if the dispute is decided for the merchant.",
-    "final_credit": "The credit that stays on the account after a decision. Zero until the dispute is resolved in the cardholder's favor."
-  }
-}

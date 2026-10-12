@@ -468,3 +468,52 @@ def test_the_answer_directive_carries_what_to_say():
     r = say(a, s, F_CORE)
     d = next(x for x in r.trace["directives"] if x["action"] == "answer_record")
     assert "60" in d["say"] and d["say"] in r.reply
+
+
+class Blank(OfflineLLM):
+    """An extractor that misses every signal: the worst case the backstop must cover."""
+
+    def extract(self, system, user, schema, tool_name):
+        r = super().extract(system, user, schema, tool_name)
+        keep = ("full_name", "dob", "id_last4", "phone", "email", "party", "intent")
+        r.value = {k: v for k, v in r.value.items() if k in keep}
+        return r
+
+
+@pytest.mark.parametrize("dom,text", [("freight", "There's been an accident at the dock and my arm is hurt."),
+                                      ("clinic", "I'm having chest pain in the waiting room.")])
+def test_code_raises_an_emergency_the_model_missed(dom, text):
+    a, s = new(dom, Blank())
+    r = say(a, s, text)
+    assert s.handoff_reason == "emergency" and "911" in r.reply
+
+
+def test_code_reads_a_proxy_introduction_the_model_swapped():
+    class Swapped(OfflineLLM):
+        def extract(self, system, user, schema, tool_name):
+            r = super().extract(system, user, schema, tool_name)
+            if "rep_name" in r.value:
+                r.value = {"full_name": r.value["rep_name"], "dob": r.value.get("dob"), "id_last4": r.value.get("id_last4")}
+            return r
+
+    a, s = new("freight", Swapped())
+    say(a, s, F_REP)
+    assert s.caller_role == "representative" and s.rep_name == "Maria Alvarez" and s.rep_authorized
+
+
+def test_code_hears_that_the_caller_is_done():
+    a, s = new("freight", Blank())
+    say(a, s, F_CORE, "No, that's all.")
+    assert s.phase == Phase.POST_PROCESS
+
+
+def test_an_off_topic_question_with_intent_other_is_off_topic():
+    class Other(OfflineLLM):
+        def extract(self, system, user, schema, tool_name):
+            r = super().extract(system, user, schema, tool_name)
+            r.value = {"intent": "other", "scope": "in_scope"}
+            return r
+
+    a, s = new("freight", Other())
+    r = say(a, s, "What is RL?")
+    assert "off_topic" in actions(r) and "noted_hint" not in actions(r)

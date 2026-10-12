@@ -10,6 +10,7 @@ import re
 from typing import Optional
 
 from ..config import Settings, settings as default_settings
+from . import signals
 from .data import norm_account, norm_dob, norm_email, norm_last4, norm_phone, same_person
 from .domain import Domain
 from .extraction import Extraction
@@ -79,6 +80,24 @@ class Procedure:
         found = self.domain.offline_hints(text, tl, s.phase.value, self.cfg.today())
         update = {k: found[k] for k in self._EXACT if found.get(k)}
         update.update({k: found[k] for k in self._BACKUP if found.get(k) and not getattr(ex, k)})
+
+        sig = signals.read(text, s.phase.value, self.domain)
+        if sig.emergency and not ex.emergency:
+            update["emergency"] = True
+        if sig.restricted and not ex.restricted_request:
+            update["restricted_request"] = True
+        if sig.done and not ex.done:
+            update["done"] = True
+        if sig.email_choice and not ex.email_choice:
+            update["email_choice"] = sig.email_choice
+        if sig.rep_name and not ex.rep_name:
+            # A proxy said who they are and who they call for; the model may have swapped the two.
+            update.update(rep_name=sig.rep_name, caller_role="representative", full_name=sig.holder_name)
+            if sig.relationship and not ex.relationship:
+                update["relationship"] = sig.relationship
+        has_identity = any(getattr(ex, f) for f in (*IDENTITY_FIELDS, "account_number"))
+        if sig.off_topic and ex.scope == "in_scope" and not has_identity:
+            update["scope"] = "out_of_scope"
         if update:
             s.log("hints_from_text", fields=sorted(update))
         return ex.model_copy(update=update) if update else ex
@@ -236,7 +255,8 @@ class Procedure:
     @staticmethod
     def _turn_hints(ex: Extraction) -> IntentMemory:
         return IntentMemory(record_id=ex.record_id, party=ex.party, category=ex.category, status=ex.record_status,
-                            date=ex.date, month=ex.month, year=ex.year, intent=ex.intent)
+                            date=ex.date, month=ex.month, year=ex.year,
+                            intent=ex.intent if ex.intent != "other" else None)
 
     # ------------------------------------------------------------ VERIFY_ID
 

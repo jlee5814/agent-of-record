@@ -131,8 +131,9 @@ class Procedure:
         if not s.verified_party_id:
             return False
         rec = self.store.person(s.verified_party_id)
-        new_rep = bool(ex.caller_role == "representative" or ex.rep_name) and s.caller_role != "representative"
-        other_rep = bool(ex.rep_name and s.rep_name and not same_person(ex.rep_name, [s.rep_name]))
+        is_rep, rep_name = self._rep_claim(s, ex)
+        new_rep = is_rep and s.caller_role != "representative"
+        other_rep = bool(rep_name and s.rep_name and not same_person(rep_name, [s.rep_name]))
         other_name = bool(ex.full_name and rec and not same_person(ex.full_name, [rec.name, *rec.name_aliases]))
         if not (new_rep or other_rep or other_name):
             return False
@@ -151,6 +152,21 @@ class Procedure:
         s.context_start = len(s.transcript) - 1      # models now see only the new speaker's turn
         return True
 
+    def _rep_claim(self, s: SessionState, ex: Extraction) -> tuple[bool, Optional[str]]:
+        """Decide whether the speaker calls for someone else. The model's label alone is not enough.
+
+        Found live with Qwen3-8B: it tagged account holders calling for themselves as
+        representatives. A representative must give a name of their own, distinct
+        from the account holder's, or state a relationship.
+        """
+        holder = [n for n in (ex.full_name, s.identity.full_name) if n]
+        if s.verified_party_id:
+            rec = self.store.person(s.verified_party_id)
+            holder += [rec.name, *rec.name_aliases]
+        name = ex.rep_name if ex.rep_name and not (holder and same_person(ex.rep_name, holder)) else None
+        is_rep = bool(name) or (ex.caller_role == "representative" and bool(ex.relationship))
+        return is_rep, name
+
     # ------------------------------------------------------------ merge
 
     def _merge(self, s: SessionState, ex: Extraction) -> None:
@@ -161,16 +177,15 @@ class Procedure:
                     setattr(s.identity, f, v)
                     if f != "account_number":
                         s.identity_dirty = True
-            if ex.caller_role == "representative":
+            is_rep, rep_name = self._rep_claim(s, ex)
+            if is_rep:
                 s.caller_role = "representative"
+                if ex.relationship:
+                    s.rep_relationship = ex.relationship
             elif ex.caller_role == "holder" and s.caller_role == "unknown":
                 s.caller_role = "holder"
-            if ex.rep_name:
-                s.rep_name = ex.rep_name
-                if s.caller_role == "unknown":
-                    s.caller_role = "representative"
-            if ex.relationship:
-                s.rep_relationship = ex.relationship
+            if rep_name:
+                s.rep_name = rep_name
 
         # Remember intent hints whenever they appear, even before verification.
         hints = self._turn_hints(ex)
@@ -264,7 +279,8 @@ class Procedure:
             s.rep_authorized = rep_authorized(s.rep_name, s.verified_party_id, self.store)
             s.log("rep_check", rep=s.rep_name, authorized=s.rep_authorized)
         if not s.rep_name:
-            out.append({"action": "ask_rep_identity"})
+            if {"action": "ask_rep_identity"} not in out:
+                out.append({"action": "ask_rep_identity"})
             return
         if not s.rep_authorized:
             out.append({"action": "rep_not_authorized"})
@@ -375,7 +391,10 @@ class Procedure:
             s.topics_discussed.append(rec.record_id)
         if follow:
             s.topics_discussed.append(follow["topic"])
-        out.append({"action": "answer_record", "intent": intent})
+        # Code chooses what to say; the reply model only words it.
+        say = follow["text"] if follow and follow["topic"] != "fallback" else \
+            self.domain.answer(ctx["grounded"]["record"], intent)
+        out.append({"action": "answer_record", "intent": intent, "say": say})
         deadline = ctx["grounded"]["record"].get("deadline")
         if deadline and deadline["expired"] and not s.handoff_offered:
             out.append({"action": "deadline_passed"})

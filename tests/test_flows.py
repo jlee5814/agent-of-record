@@ -436,3 +436,34 @@ def test_callers_own_name_does_not_pick_an_account():
     a, s = new("portfolio")
     r = say(a, s, "Linda Park, DOB 1963-05-11, custodian account 6042. I have a question.")
     assert "ask_disambiguate" in actions(r) and len(s.candidate_ids) == 3
+
+
+# ================================================================ found live on Qwen3-8B
+
+class Mislabel(OfflineLLM):
+    """Plays the 8B extractor's habits: labels the holder a representative and invents a trailer type."""
+
+    def extract(self, system, user, schema, tool_name):
+        r = super().extract(system, user, schema, tool_name)
+        if "full_name" in r.value:
+            r.value.update({"caller_role": "representative", "category": "dry_van"})
+        return r
+
+
+def test_a_bare_representative_label_does_not_block_the_holder():
+    a, s = new("freight", Mislabel())
+    r = say(a, s, F_CORE)
+    assert s.caller_role != "representative" and s.verified and "ask_rep_identity" not in actions(r)
+
+
+def test_an_invented_hint_is_relaxed_away():
+    a, s = new("freight", Mislabel())
+    say(a, s, F_CORE)
+    assert s.selected_id == "LD-7731"
+
+
+def test_the_answer_directive_carries_what_to_say():
+    a, s = new("freight")
+    r = say(a, s, F_CORE)
+    d = next(x for x in r.trace["directives"] if x["action"] == "answer_record")
+    assert "60" in d["say"] and d["say"] in r.reply

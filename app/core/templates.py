@@ -121,7 +121,7 @@ def render_template(payload: dict) -> str:
         elif a == "ask_record_question":
             out.append("What would you like to know about it?")
         elif a == "answer_record":
-            ans = _answer(g, x.get("intent"), d)
+            ans = x.get("say") or _answer(g, x.get("intent"), d)
             out.append(ans or f"I don't have that detail on file, but I can tell you this {noun}'s status and what's next.")
         elif a == "deadline_passed":
             out.append(f"Because the deadline has passed, {d.team} should review a late submission. Would you like me to transfer you?")

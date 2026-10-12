@@ -14,6 +14,9 @@ from .state import IntentMemory
 if TYPE_CHECKING:
     from .domain import Domain
 
+# Weakest first: the model is likeliest to invent these, and they identify a record least.
+RELAX_ORDER = ("category", "status", "year", "month", "date")
+
 FOLLOWUP_TOPICS = ["missing_document_alternatives", "submission_timing", "processing_time",
                    "submission_method", "file_format"]
 
@@ -69,6 +72,14 @@ def resolve(memory: IntentMemory, records: list[Record], domain: "Domain") -> Re
         return Resolution(status="ambiguous", candidates=[r.record_id for r in records])
 
     survivors = [r for r in records if keep(r)]
+    # A hint the model invented (a trailer type, a status) can exclude the right record.
+    # When everything together matches nothing, drop the weakest hints one at a time.
+    for weak in RELAX_ORDER:
+        if survivors or len(hints) <= 1:
+            break
+        if weak in hints:
+            hints.pop(weak)
+            survivors = [r for r in records if keep(r)]
     if len(survivors) == 1:
         return Resolution(status="selected", record_id=survivors[0].record_id, used_hints=hints)
     if len(survivors) > 1:

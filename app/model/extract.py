@@ -31,7 +31,8 @@ def _system(domain_key: str) -> str:
 
 Return values only for things the caller said in their LATEST message, using earlier turns only to
 interpret short answers (for example a bare date after the agent asked for date of birth).
-Leave a field out when the caller did not give it. Never guess or fill in values.
+Leave a field out when the caller did not give it. Never guess or fill in values. Most fields are
+empty on most turns; a field with a fixed list of values gets one only when the caller's words name it.
 
 Identity
 - full_name: the {d.person_noun}'s full name as spoken. If someone calls for the {d.person_noun}, this is the
@@ -40,10 +41,11 @@ Identity
 - phone, email: as given. A spelled out email (jane dot doe at mail dot com) becomes jane.doe@mail.com.
 - id_last4: the {d.id_last4_label}.
 - account_number: their {d.account_label}, for example {d.account_example}.
-- caller_role: representative when the caller says they call for someone else (my husband, my father).
+- caller_role: representative only when the caller says they call for someone else (my husband, my
+  father); then also fill rep_name and relationship. Someone giving their own details is the holder.
 
 Which {d.record_noun} (capture these even during identity verification)
-- record_id like {d.id_prefix}-1234.
+- record_id: the {d.record_noun} number, only if the caller says one.
 - {d.hint_notes}
 - category, one of:
 {_options(d.categories)}

@@ -119,9 +119,9 @@ class Domain:
 
     @staticmethod
     def day_hint(tl: str, today: date) -> Optional[str]:
-        if re.search(r"\btoday\b|\bthis (morning|afternoon)\b|\bright now\b", tl):
+        if re.search(r"\btoday\b|\bthis (morning|afternoon)\b|\bright now\b|\bhoy\b|오늘", tl):
             return today.isoformat()
-        if re.search(r"\byesterday\b", tl):
+        if re.search(r"\byesterday\b|\bayer\b|어제", tl):
             return (today - timedelta(days=1)).isoformat()
         return None
 

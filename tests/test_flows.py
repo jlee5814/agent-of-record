@@ -517,3 +517,25 @@ def test_an_off_topic_question_with_intent_other_is_off_topic():
     a, s = new("freight", Other())
     r = say(a, s, "What is RL?")
     assert "off_topic" in actions(r) and "noted_hint" not in actions(r)
+
+
+def test_an_identity_value_the_caller_never_typed_is_dropped():
+    """Found live: the extractor added a detail the caller never gave, and verification failed."""
+    class Inventor(OfflineLLM):
+        def extract(self, system, user, schema, tool_name):
+            r = super().extract(system, user, schema, tool_name)
+            if "full_name" in r.value:
+                r.value["phone"] = "706-555-9999"
+            return r
+
+    a, s = new("freight", Inventor())
+    say(a, s, F_ID)
+    assert s.verified_party_id == "D1" and any(e.kind == "identity_not_typed" for e in s.events)
+
+
+def test_typed_check():
+    from app.core.procedure import _typed
+    said = "Hola, soy Tony Alvarez. Nací el 14 de septiembre de 1981 y mi licencia termina en 4417."
+    assert _typed("full_name", "Tony Alvarez", said) and _typed("dob", "1981-09-14", said)
+    assert _typed("id_last4", "4417", said) and not _typed("phone", "7065559999", said)
+    assert not _typed("full_name", "Maria Alvarez", said)

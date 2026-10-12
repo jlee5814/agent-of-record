@@ -43,6 +43,24 @@ def _same_value(field: str, new: str, old: Optional[str]) -> bool:
     return new == old
 
 
+def _typed(field: str, value: str, said: str) -> bool:
+    """True if an extracted identity value is grounded in what the caller typed.
+
+    Names: every word appears. Dates: the year appears. Numbers: the last four
+    digits appear. Emails: the part before the @ appears.
+    """
+    low, digits = said.lower(), re.sub(r"\D", "", said)
+    if field in ("full_name", "rep_name"):
+        return all(w in low for w in re.findall(r"[a-z]+", value.lower()))
+    if field == "dob":
+        year = re.search(r"(19|20)\d{2}", value)
+        return bool(year) and year.group(0) in said
+    if field == "email":
+        return value.split("@")[0].lower().replace(" ", "") in low.replace(" ", "")
+    tail = re.sub(r"\D", "", value)[-4:]
+    return bool(tail) and tail in digits
+
+
 class Procedure:
     def __init__(self, domain: Domain, cfg: Settings = default_settings, outbox: Optional[Outbox] = None,
                  failures: Optional[FailureRegistry] = None):
@@ -80,6 +98,16 @@ class Procedure:
         found = self.domain.offline_hints(text, tl, s.phase.value, self.cfg.today())
         update = {k: found[k] for k in self._EXACT if found.get(k)}
         update.update({k: found[k] for k in self._BACKUP if found.get(k) and not getattr(ex, k)})
+        if found.get("intent") and (ex.intent or "other").startswith(("general", "other")):
+            update["intent"] = found["intent"]      # a specific phrase beats a generic label
+
+        # The model may not invent who someone is: an identity value the caller never typed is dropped.
+        said = " ".join(m["content"] for m in s.transcript[s.context_start:] if m["role"] == "user")
+        for f in (*IDENTITY_FIELDS, "account_number", "rep_name"):
+            v = getattr(ex, f)
+            if v and not _typed(f, v, said):
+                update[f] = None
+                s.log("identity_not_typed", field=f)
 
         sig = signals.read(text, s.phase.value, self.domain)
         if sig.emergency and not ex.emergency:

@@ -217,7 +217,7 @@ def test_full_turn_through_the_agent_with_a_mock_qwen():
     a = Agent(llm, "freight")
     s = SessionState()
     a.opening(s)
-    r = a.handle(s, "Hi, it's Tony ...")
+    r = a.handle(s, "Hi, it's Tony Alvarez, DOB 1981-09-14, CDL 4417. How long at Peachtree?")
     assert s.verified_party_id == "D1" and s.selected_id == "LD-7731" and s.phase == Phase.PROCESS_CASE
     assert r.trace["reply_source"] == "model" and r.trace["guard"] == []
     assert [c["stage"] for c in r.trace["calls"]] == ["extract", "respond"]
@@ -235,7 +235,7 @@ def test_an_invented_wait_time_from_the_model_is_replaced():
     a = Agent(llm, "clinic")
     s = SessionState()
     a.opening(s)
-    r = a.handle(s, "hi")
+    r = a.handle(s, "Hannah Kim, DOB 1988-07-19, member ID 5530. I'm in the waiting room, when's my turn?")
     assert r.trace["reply_source"] == "template_guard" and "in 5 minutes" not in r.reply and "35" in r.reply
 
 

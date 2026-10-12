@@ -1,6 +1,10 @@
-# gated-agent
+# agent-of-record
 
-A support agent for three jobs I've done: driving a truck, working in a clinic, and portfolio operations at an investment manager. Code decides what the agent may say. A local Qwen3-8B, served by SGLang on Apple Silicon through its MLX backend, only reads the caller's words and writes the reply.
+An agent of record for any system of record.
+
+Every job I've had meant reconciling two records while someone waited: a driver's clock against the signed times at the dock, a patient's appointment against the real queue, an investment manager's book against the custodian bank's. So I built an agent that checks every reply against the record before the caller sees it.
+
+A local Qwen3-8B, served by SGLang on Apple Silicon through its MLX backend, reads the caller's words and writes the reply. Code decides everything else: who the caller is, which record they mean, and what may be said. Then a guard reconciles the reply against the record. Every amount, time, and ID must match, or the reply is replaced. The model is the working copy; the record is the book of record.
 
 The carrier, the clinic, the investment manager, the banks, and every person in the data are made up.
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>gated-agent</title>
+<title>agent-of-record</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
 <style>
@@ -118,7 +118,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
 <body>
 <div class="app">
   <header>
-    <h1>gated-agent</h1>
+    <h1>agent-of-record</h1>
     <span class="meta" id="meta">Not connected</span>
     <span class="sp"></span>
     <button class="btn toggle-panel" id="togglePanel" aria-controls="panel" aria-expanded="false">State</button>
@@ -209,8 +209,8 @@ let EXAMPLES = {};
 const cfg = {domain:null, provider:null, model:"", baseUrl:"", extractMode:"", scenario:"default"};
 let sid = null, busy = false, prev = null;
 
-function load(){ try{ Object.assign(cfg, JSON.parse(sessionStorage.getItem("gated-cfg")||"{}")); }catch(e){} }
-function save(){ try{ sessionStorage.setItem("gated-cfg", JSON.stringify(cfg)); }catch(e){} }
+function load(){ try{ Object.assign(cfg, JSON.parse(sessionStorage.getItem("aor-cfg")||"{}")); }catch(e){} }
+function save(){ try{ sessionStorage.setItem("aor-cfg", JSON.stringify(cfg)); }catch(e){} }
 
 function add(role, text, tag){
   const d = document.createElement("div");

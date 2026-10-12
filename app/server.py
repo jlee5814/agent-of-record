@@ -21,8 +21,8 @@ from .state import IDENTITY_FIELDS, Phase, SessionState
 from .summary import Outbox
 from .verify import FailureRegistry
 
-app = FastAPI(title="gated-agent")
-log = logging.getLogger("gated_agent")
+app = FastAPI(title="agent-of-record")
+log = logging.getLogger("agent_of_record")
 
 
 def _error_detail(e: Exception) -> str:

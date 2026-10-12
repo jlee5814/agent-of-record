@@ -40,7 +40,7 @@ The code lives in two packages with one seam between them.
 |---|---|---|
 | Job | Read the caller's words; write the reply | Decide everything else |
 | Behavior | Probabilistic | Deterministic |
-| Sees | The conversation, then the directives and approved facts | The records, the session, the rules |
+| Sees | The conversation, then the draft reply code wrote | The records, the session, the rules |
 | Changes state | Never | Only in the procedure |
 | Files | `extract.py`, `reply.py`, `llm.py`, `offline.py` | `procedure.py`, `verify.py`, `guard.py`, `extraction.py`, `records.py`, `templates.py`, domains |
 
@@ -49,9 +49,10 @@ The code lives in two packages with one seam between them.
 ## How a turn works
 
 1. **Extract** (model). Qwen reads the latest message and proposes fields: identity details, hints about the record, what the caller wants, tone, and any emergency. It sees the conversation, never the records. `core/extraction.py` validates the proposal and drops any bad field.
-2. **Decide** (code). The procedure runs the gates, picks the record, and emits directives plus the facts the reply may use. No other code changes state.
-3. **Reply** (model). Qwen turns the directives and approved facts into a sentence. Before verification, it gets no facts.
-4. **Guard** (code). Before verification, the reply may contain nothing from a record. After, every record number, dollar amount, clock time, and duration must appear in the approved facts or in the caller's own words. A reply that fails becomes a fixed template from `core/templates.py`, and the trace says so.
+2. **Check the extraction** (code). The model's proposal is a suggestion, not a fact. An identity value counts only if the caller typed it; a name needs every word, a date of birth needs the year. Anything code can read exactly, a record ID, a date, an email, an emergency, a request for a person, comes from the text and overrides the model. Each correction is logged.
+3. **Decide** (code). The procedure runs the gates, picks the record, and writes the reply from fixed templates. When the hints match no record, the weakest hint is dropped first. No other code changes state.
+4. **Reply** (model). Qwen rewrites that draft so it reads like a person: same facts, same order, nothing added. It never sees the record.
+5. **Guard** (code). Before verification, the reply may contain nothing from a record. After, every record number, dollar amount, clock time, and duration must appear in the approved facts or in the caller's own words. A reply that fails becomes the draft, and the trace says so.
 
 ## The rules
 
@@ -77,13 +78,20 @@ The code lives in two packages with one seam between them.
 
 ```bash
 SGLANG_USE_MLX=1 python -m sglang.launch_server \
-  --model-path Qwen/Qwen3-8B \
+  --model-path mlx-community/Qwen3-8B-4bit \
   --disable-cuda-graph \
+  --mlx-enable-sampling \
+  --max-total-tokens 16384 \
   --enable-cache-report \
   --port 30000
 ```
 
-`--enable-cache-report` makes SGLang return cached token counts. For less memory, swap in a 4 bit MLX build such as `mlx-community/Qwen3-8B-4bit`.
+Two of these flags are not optional on MLX:
+
+- `--mlx-enable-sampling` turns on grammar vocab masks. Without it, MLX decodes by greedy argmax with no mask, xgrammar rejects the first token that breaks the schema, and structured output fails.
+- `--max-total-tokens` sizes the token pool. Left to the memory fraction, it came out near 1,080 tokens on a 24 GB M4 Pro, and a 1,380 token prompt was aborted while the server still answered 200.
+
+`--enable-cache-report` makes SGLang return cached token counts.
 
 **2. Start the agent.**
 
@@ -111,6 +119,35 @@ python -m bench.run --provider offline                 # no server
 
 The report gives pass rate, server errors, guard interventions, parse failures, latency per step, time to first token, decode speed, cache hit share, and chats per minute. Server errors are counted apart from failures, so a timeout never reads as a leak. Every rollout, with each caller line and reply, lands in `bench/results/`.
 
+## Results
+
+Qwen3-8B 4 bit on SGLang's MLX backend, a 24 GB M4 Pro, thinking off, one pass of all 61 callers.
+
+**Extraction mode, four chats at a time.** 183 conversations, 384 turns.
+
+| | Checks passed | Callers with every check passed | Parse failures |
+|---|---|---|---|
+| Grammar constrained JSON | 94% | 54 of 61 | 0 of 128 turns |
+| JSON mode | 90% | 53 of 61 | 0 of 128 turns |
+| Prompt only | 83% | 45 of 61 | 26 of 128 turns |
+
+**Grammar constrained JSON, one chat at a time.**
+
+| | Freight | Clinic | Portfolio |
+|---|---|---|---|
+| Checks passed | 98% | 96% | 96% |
+| Turn p50 | 2.7 s | 2.4 s | 3.2 s |
+| Reply time to first token p50 | 497 ms | 492 ms | 643 ms |
+| Decode, extract and reply | 45 and 51 tok/s | 45 and 50 tok/s | 45 and 50 tok/s |
+| Input from prefix cache | 82% | 83% | 81% |
+
+What the numbers say:
+
+- **No safety check failed.** Across 244 conversations, 172 checks for leaks, promises, false approvals, and a relocked gate all passed. Every failure was functional, and most failed toward a person: a frustrated caller handed off instead of asked again, a JSON mode extraction that heard a request for a human.
+- **Code did most of the correcting.** In the four chat run, code dropped 78 identity values the caller never typed, filled 185 record hints, and caught 69 signals the model missed. The guard blocked 2 replies. Once the model rewrites a correct draft, there is little left for the guard to catch; checking the extraction matters more.
+- **The grammar pays for itself.** Prompt only extraction failed to parse on one turn in five, and each failure costs the caller a turn. Under the grammar, extraction decoded at 45 tok/s against 50 for free text replies.
+- **Concurrency costs the single caller.** Four chats at once took the median turn from about 3 s to between 9 and 14 s.
+
 ## Adding a domain
 
 A new domain is one Python file and one data folder. Subclass `Domain` in `app/core/domains/` and add a folder under `data/` with people, contacts, records, guidance, and consent scenarios. The class supplies the words (what a record is called, who takes a handoff), the allowed extraction values, how a record becomes sentences, and a few regexes for offline mode. The procedure, the gates, and the guard stay the same.
@@ -121,12 +158,13 @@ A new domain is one Python file and one data folder. Subclass `Domain` in `app/c
 pytest
 ```
 
-159 tests, no server needed. The gate tests run in every domain, and a boundary test keeps the model and the code apart. A mock transport stands in for SGLang, so the tests pin the request shape, the extraction fallbacks, stray think tags, cache reporting, and a full turn where the model invents a wait time and the guard replaces it.
+170 tests, no server needed. The gate tests run in every domain, and a boundary test keeps the model and the code apart. A mock transport stands in for SGLang, so the tests pin the request shape, the extraction fallbacks, stray think tags, cache reporting, and a full turn where the model invents a wait time and the guard replaces it.
 
 ## Tradeoffs
 
 - **The guard checks numbers, not meaning.** It catches an invented wait time but not a promise of a real amount. The bench catches those. A second model pass could catch them live, at the cost of another call each turn.
-- **Templates are the floor.** When the guard blocks a reply, the caller gets a correct but stiff answer. I would rather be stiff than wrong.
+- **The draft is the floor.** When the guard blocks a reply, the caller gets the template draft: correct but stiff. I would rather be stiff than wrong.
+- **The model rewrites; it doesn't compose.** Early runs had Qwen write from directives and raw facts. It asked for identity after verification and gave the wrong reason for a deduction. Rewriting a correct draft costs some voice and fixed both.
 - **The status feed is scripted.** Each ask reads the next update, not a clock, which keeps the bench repeatable. A real deployment would read live dock and queue systems.
 - **The offline extractor is English only.** The language scenarios run against Qwen alone.
 
@@ -139,6 +177,7 @@ app/
     procedure.py    the gates and the state machine; the only state writer
     verify.py       identity matching, lockout, consent
     extraction.py   the contract: fields the model may propose, and their validation
+    signals.py      what code reads from the text itself: IDs, dates, emergencies, proxies
     records.py      record lookup and document guidance
     guard.py        reconciles each reply against the record
     templates.py    fixed wording for every directive

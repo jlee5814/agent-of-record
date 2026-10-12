@@ -105,13 +105,14 @@ class Agent:
 
         # 3. Reply, then 4. guard.
         payload = R.build_payload(state, D, directives, grounded, ex.question, ex.emotion)
+        payload["draft"] = T.render_template(payload)
         gen = self.llm.generate(R.system_prompt(D), R.build_user_message(state, payload))
         calls.append(gen.stats)
         reply = gen.value
         reply_source = "offline_template" if getattr(self.llm, "name", "").startswith("offline") else "model"
         if not reply:
             # Never silent: the trace says the model came back empty and why.
-            reply = T.render_template(payload)
+            reply = payload["draft"]
             reply_source = "template_empty_model_reply"
             state.log("empty_model_reply", stop_reason=gen.stats.stop_reason,
                       thinking_chars=gen.stats.thinking_chars)
@@ -121,7 +122,7 @@ class Agent:
         problems = G.guard(reply, state, self.store, D, grounded, user_texts)
         if problems:
             state.log("guard_blocked", problems=problems, blocked=reply)
-            reply = T.render_template(payload)
+            reply = payload["draft"]
             reply_source = "template_guard"
         guard_ms = (time.perf_counter() - t_guard) * 1000
 

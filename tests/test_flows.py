@@ -114,7 +114,8 @@ def test_reply_model_sees_nothing_before_verification(dom):
     a, s = new(dom, spy)
     say(a, s, "What's going on with my account?", "I already told you who I am. This is ridiculous.")
     for p in spy.payloads:
-        assert p["grounded"] == {}
+        assert set(p) == {"caller_emotion", "draft"}           # never the record itself
+        assert clean(p["draft"], CASES[dom])
     for u in spy.extract_inputs:
         assert "records_the_agent_listed" not in u
 

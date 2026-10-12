@@ -6,6 +6,7 @@ the facts the reply may use. No model is called here.
 """
 from __future__ import annotations
 
+import re
 from typing import Optional
 
 from ..config import Settings, settings as default_settings
@@ -55,8 +56,32 @@ class Procedure:
         """Apply one turn. Returns the directives and the facts the reply may use (None before verification)."""
         out: list[dict] = []
         ctx = {"grounded": None, "utterance": utterance}
+        ex = self._fill_from_text(s, ex, utterance)
         self._control(s, ex, out, ctx)
         return out, (ctx["grounded"] if s.verified else None)
+
+    # Hints with an exact pattern: code's reading wins over the model's.
+    _EXACT = ("record_id", "date")
+    # Hints code can spot by phrase: used only where the model left a gap.
+    _BACKUP = ("party", "category", "record_status", "intent")
+
+    def _fill_from_text(self, s: SessionState, ex: Extraction, text: str) -> Extraction:
+        """Read the patterns a regex reads reliably (IDs, today, sitting at the dock) from the caller's words.
+
+        Found live with Qwen3-8B: it skipped dates like today and copied an example
+        ID from its prompt. The caller's own name is hidden first, since it can echo
+        an account name (Linda Park, Park Family Trust).
+        """
+        tl = text.lower()
+        for name in (ex.full_name, ex.rep_name, s.identity.full_name):
+            for word in (name or "").lower().split():
+                tl = re.sub(rf"\b{re.escape(word)}\b", " ", tl)
+        found = self.domain.offline_hints(text, tl, s.phase.value, self.cfg.today())
+        update = {k: found[k] for k in self._EXACT if found.get(k)}
+        update.update({k: found[k] for k in self._BACKUP if found.get(k) and not getattr(ex, k)})
+        if update:
+            s.log("hints_from_text", fields=sorted(update))
+        return ex.model_copy(update=update) if update else ex
 
     def _control(self, s: SessionState, ex: Extraction, out: list[dict], ctx: dict) -> None:
         if s.phase in (Phase.HUMAN_HANDOFF, Phase.ENDED):

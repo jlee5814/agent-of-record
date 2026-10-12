@@ -149,5 +149,5 @@ class OfflineLLM:
         from ..core.templates import render_template
         t0 = time.perf_counter()
         payload = json.loads(user.split("PAYLOAD_JSON:\n", 1)[1])
-        text = render_template(payload)
+        text = payload.get("draft") or render_template(payload)
         return LLMResult(text, CallStats("respond", "offline", (time.perf_counter() - t0) * 1000))

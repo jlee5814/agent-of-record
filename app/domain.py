@@ -113,7 +113,7 @@ class Domain:
         words = set(re.findall(r"[a-z]+", tl))
         for r in self.store.records:
             for tok in sorted(name_tokens(f"{r.counterparty} {r.location}")):
-                if len(tok) > 3 and tok in words:
+                if len(tok) >= 3 and tok in words:
                     return tok
         return None
 
@@ -137,9 +137,12 @@ def get_domain(key: str) -> Domain:
         elif key == "clinic":
             from .domains.clinic import Clinic
             _REGISTRY[key] = Clinic()
+        elif key == "portfolio":
+            from .domains.portfolio import Portfolio
+            _REGISTRY[key] = Portfolio()
         else:
-            raise ValueError(f"unknown domain {key!r}; use freight or clinic")
+            raise ValueError(f"unknown domain {key!r}; use {', '.join(DOMAINS)}")
     return _REGISTRY[key]
 
 
-DOMAINS = ("freight", "clinic")
+DOMAINS = ("freight", "clinic", "portfolio")

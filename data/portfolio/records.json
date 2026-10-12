@@ -1,0 +1,127 @@
+[
+ {
+  "record_id": "REC-9104",
+  "party_id": "C1",
+  "counterparty": "Harbor Trust Bank",
+  "location": "Park Family Trust",
+  "category": "balanced",
+  "date": "2026-03-09",
+  "status": "open_breaks",
+  "summary": "Daily reconciliation with two open items.",
+  "manager_mv": "2481350.00",
+  "custodian_mv": "2478900.00",
+  "breaks": [
+   {
+    "type": "pending trade",
+    "amount": "1800.00",
+    "state": "open",
+    "detail": "a purchase traded on 2026-03-09 that settles on 2026-03-10; Northbridge records it on the trade date and the custodian on the settlement date"
+   },
+   {
+    "type": "accrued interest",
+    "amount": "650.00",
+    "state": "open",
+    "detail": "interest earned on a Treasury note that Northbridge accrues daily and the custodian posts on the coupon date"
+   }
+  ],
+  "documents_needed": [],
+  "deadline": null,
+  "live": [
+   {
+    "status": "under_research",
+    "remaining": "2450.00",
+    "note": "Operations is matching both open items with the custodian."
+   },
+   {
+    "status": "partially_matched",
+    "remaining": "650.00",
+    "note": "The trade settled this morning and now matches. The accrued interest item remains."
+   },
+   {
+    "status": "matched",
+    "remaining": "0.00",
+    "note": "The custodian confirmed the accrual. Both sides now match."
+   }
+  ]
+ },
+ {
+  "record_id": "REC-8990",
+  "party_id": "C1",
+  "counterparty": "Harbor Trust Bank",
+  "location": "Park Family Trust",
+  "category": "balanced",
+  "date": "2026-02-27",
+  "status": "matched",
+  "summary": "Month end reconciliation, fully matched.",
+  "manager_mv": "2455120.00",
+  "custodian_mv": "2455120.00",
+  "breaks": [],
+  "documents_needed": [],
+  "deadline": null,
+  "live": []
+ },
+ {
+  "record_id": "REC-9050",
+  "party_id": "C1",
+  "counterparty": "Summit National Bank",
+  "location": "Linda Park IRA",
+  "category": "core_fixed_income",
+  "date": "2026-02-27",
+  "status": "awaiting_statement",
+  "summary": "Month end reconciliation blocked; the custodian file for February did not arrive.",
+  "manager_mv": "612400.00",
+  "custodian_mv": null,
+  "breaks": [],
+  "documents_needed": [
+   "custodian statement for the missing period"
+  ],
+  "deadline": "2026-03-17",
+  "live": []
+ },
+ {
+  "record_id": "REC-9120",
+  "party_id": "C2",
+  "counterparty": "Summit National Bank",
+  "location": "Reed Rollover IRA",
+  "category": "large_cap_equity",
+  "date": "2026-03-09",
+  "status": "resolved",
+  "summary": "A stock split caused a one day break.",
+  "manager_mv": "1034560.00",
+  "custodian_mv": "1034560.00",
+  "breaks": [
+   {
+    "type": "corporate action",
+    "amount": "12300.00",
+    "state": "resolved",
+    "detail": "a two for one stock split the custodian processed one day after Northbridge did; it cleared on 2026-03-10"
+   }
+  ],
+  "documents_needed": [],
+  "deadline": null,
+  "live": []
+ },
+ {
+  "record_id": "REC-9133",
+  "party_id": "C3",
+  "counterparty": "Harbor Trust Bank",
+  "location": "Adeyemi Joint Account",
+  "category": "core_fixed_income",
+  "date": "2026-03-09",
+  "status": "open_breaks",
+  "summary": "Valuation difference on one municipal bond.",
+  "manager_mv": "845210.00",
+  "custodian_mv": "842030.00",
+  "breaks": [
+   {
+    "type": "pricing source",
+    "amount": "3180.00",
+    "state": "open",
+    "detail": "Northbridge and the custodian price one municipal bond from different vendors; it is a valuation difference, not a change in the holdings"
+   }
+  ],
+  "documents_needed": [],
+  "deadline": null,
+  "live": []
+ }
+]

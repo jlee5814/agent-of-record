@@ -84,6 +84,8 @@ def test_grammar_schema_drops_null_branches_and_bounds():
     assert "dock_status" in g["properties"]["intent"]["enum"]
     clinic = grammar_schema(json_schema(get_domain("clinic")))
     assert "wait_time" in clinic["properties"]["intent"]["enum"]
+    portfolio = grammar_schema(json_schema(get_domain("portfolio")))
+    assert "status_update" in portfolio["properties"]["intent"]["enum"]
 
 
 def test_generate_uses_qwen_sampling_without_thinking():

@@ -41,7 +41,7 @@ def heuristic_extract(text: str, phase: str, last_agent: str, domain, today: dat
     words = _first(r"\b((?:%s)\s+\d{1,2}(?:st|nd|rd|th)?,?\s+(?:19|20)\d{2})\b" % "|".join(
         m for m in MONTHS if len(m) > 3), t, re.I)
     out["dob"] = iso or slash or words
-    out["id_last4"] = _first(r"(?:cdl|member id|insurance id|insurance|last\s*(?:four|4)(?:\s*digits)?|ends? in|"
+    out["id_last4"] = _first(r"(?:cdl|member id|insurance id|insurance|custodian account|last\s*(?:four|4)(?:\s*digits)?|ends? in|"
                              r"ending(?:\s+in)?)[^0-9]{0,25}(\d{4})\b", t, re.I)
     phone = _first(r"(\+?1?[\s.(-]*\d{3}[\s.)-]*\d{3}[\s.-]*\d{4})\b", t)
     if phone and len(re.sub(r"\D", "", phone)) in (10, 11):
@@ -57,7 +57,12 @@ def heuristic_extract(text: str, phase: str, last_agent: str, domain, today: dat
                             or _first(r"^(?:hi,?\s+|hey,?\s+)?" + NAME + r",\s+(?i:dob|born|date of birth)", t))
 
     # ---- which record, and what they want
-    out.update(domain.offline_hints(t, tl, phase, today))
+    # The caller's own name can echo an account name (Linda Park, Park Family Trust), so hide it from the hints.
+    tl_hints = tl
+    for nm in (out.get("full_name"), out.get("rep_name")):
+        for w in (nm or "").lower().split():
+            tl_hints = re.sub(rf"\b{re.escape(w)}\b", " ", tl_hints)
+    out.update(domain.offline_hints(t, tl_hints, phase, today))
     for name, num in MONTHS.items():
         if re.search(rf"\b(from|in|since|back in|of|on)\s+{name}\b", tl):
             out["month"] = num

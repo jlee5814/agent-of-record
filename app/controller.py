@@ -465,11 +465,11 @@ class Agent:
     def _answer(self, s: SessionState, ex: Optional[X._Base], out: list[dict], ctx: dict) -> None:
         rec = self.store.record(s.selected_id)
         intent = (ex.intent if ex and ex.intent else None) or s.memory.intent
-        # Live status: the first look shows the current update; asking again reads the next one.
-        if rec.live:
+        # Live status: the first status question shows the current update; each one after reads the next.
+        if rec.live and intent in self.domain.live_intents:
             if rec.record_id not in s.live_polls:
                 s.live_polls[rec.record_id] = 0
-            elif intent in self.domain.live_intents:
+            else:
                 s.live_polls[rec.record_id] = min(s.live_polls[rec.record_id] + 1, len(rec.live) - 1)
                 s.log("live_poll", record_id=rec.record_id, index=s.live_polls[rec.record_id])
         topic = ex.followup_topic if ex else None

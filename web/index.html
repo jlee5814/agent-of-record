@@ -178,6 +178,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
     <select id="domain">
       <option value="freight">Freight: a driver at the dock, detention, settlement pay</option>
       <option value="clinic">Clinic: the waiting room, your turn, the bill</option>
+      <option value="portfolio">Portfolio: manager vs custodian values, reconciliation breaks</option>
     </select>
     <label for="provider">Model provider</label>
     <select id="provider">
@@ -288,7 +289,7 @@ function render(s){
     ["ID last four", s.identity.id_last4], [`${D.account[0].toUpperCase() + D.account.slice(1)} (lookup only)`, s.identity.account_number]]);
   // memory
   const m = s.memory, parts = [];
-  if(m.status) parts.push(m.status.replaceAll("_"," ")); if(m.merchant) parts.push(m.merchant); if(m.reason) parts.push(m.reason.replaceAll("_"," "));
+  if(m.status) parts.push(m.status.replaceAll("_"," ")); if(m.party) parts.push(m.party); if(m.category) parts.push(m.category.replaceAll("_"," "));
   if(m.month) parts.push("from " + new Date(2000, m.month-1).toLocaleString("en",{month:"long"}));
   if(m.date) parts.push(m.date); if(m.year) parts.push(m.year); if(m.record_id) parts.push(m.record_id);
   const memText = parts.length ? `Hint: ${parts.join(", ")}` + (m.intent ? `. Wants: ${m.intent.replaceAll("_"," ")}.` : ".") : (m.intent ? `Wants: ${m.intent.replaceAll("_"," ")}.` : "");

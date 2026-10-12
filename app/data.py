@@ -189,7 +189,7 @@ def normalize_id(s: str, prefix: str) -> str:
 
 
 _STOP = {"the", "inc", "llc", "co", "dc", "a", "an", "my", "at", "from", "to", "in", "load", "visit", "dr",
-         "doctor", "appointment", "with", "one", "ga", "nc", "al"}
+         "doctor", "appointment", "with", "one", "ga", "nc", "al", "account", "bank", "family", "national"}
 
 
 def name_tokens(s: str) -> set[str]:

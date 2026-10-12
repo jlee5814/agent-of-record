@@ -9,7 +9,7 @@ from app.records import document_guidance, followup_answer, map_document, resolv
 from app.state import Identity, IntentMemory
 from app.verify import poll_consent, rep_authorized, verify
 
-FR, CL = get_domain("freight"), get_domain("clinic")
+FR, CL, PF = get_domain("freight"), get_domain("clinic"), get_domain("portfolio")
 TODAY = date(2026, 3, 10)
 
 
@@ -31,6 +31,8 @@ def joined(d, rid, section, live_index=0):
     (CL, Identity(full_name="Hannah Kim", dob="07/19/1988", id_last4="5530"), "P1"),
     (CL, Identity(full_name="Lan Nguyen", dob="1979-10-02", email="nguyen.lan@example.org"), "P3"),
     (CL, Identity(full_name="Thi Lan Nguyen", dob="1979-10-02", id_last4="8104"), "P3"),   # word order differs
+    (PF, Identity(full_name="Linda Park", dob="May 11, 1963", id_last4="6042"), "C1"),
+    (PF, Identity(full_name="Seun Adeyemi", dob="1977-02-14", email="o.adeyemi@example.org"), "C3"),
 ])
 def test_verifies(d, ident, party):
     r = verify(ident, d.store)
@@ -98,6 +100,11 @@ def test_consent_sequences():
     (CL, "P1", dict(party="patel", status="waiting"), "APT-5521"),
     (CL, "P1", dict(category="physical"), "APT-5602"),
     (CL, "P1", dict(party="patel", month=2), "APT-5390"),
+    (PF, "C1", dict(party="trust"), {"REC-9104", "REC-8990"}),
+    (PF, "C1", dict(party="trust", date="2026-03-09"), "REC-9104"),
+    (PF, "C1", dict(party="trust", status="open"), "REC-9104"),
+    (PF, "C1", dict(party="ira"), "REC-9050"),
+    (PF, "C1", dict(party="summit"), "REC-9050"),
 ])
 def test_resolve(d, party, hints, expect):
     r = resolve(IntentMemory(**hints), d.store.records_for(party), d)
@@ -208,3 +215,32 @@ def test_promise_and_guarantee_checks():
     assert not never_promises("40")(None, ["Yep, you'll only pay $40 today."])
     assert never_guarantees_time(None, ["I can't guarantee a time, but the estimate is about 35 minutes."])
     assert not never_guarantees_time(None, ["The doctor will definitely see you in 35 minutes."])
+
+
+# ------------------------------------------------------------- facts: portfolio
+
+def test_a_difference_is_a_break_not_missing_money():
+    v = joined(PF, "REC-9104", "values")
+    assert "a difference of $2,450.00" in v and "not missing money" in v and "official book of record" in v
+
+
+def test_break_items_add_up_to_the_difference():
+    r = PF.store.record("REC-9104")
+    assert sum(float(b["amount"]) for b in r.breaks) == float(r.manager_mv) - float(r.custodian_mv)
+
+
+def test_missing_custodian_file_is_said_plainly():
+    assert "has not arrived" in joined(PF, "REC-9050", "values")
+    assert facts(PF, "REC-9050")["deadline"]["days_left"] == 7
+
+
+def test_progress_never_promises_a_clear_date():
+    assert "can't promise when it will clear" in joined(PF, "REC-9104", "progress", 0)
+    assert "Both sides now match" in joined(PF, "REC-9104", "progress", 2)
+
+
+def test_loss_check():
+    from bench.scenarios import never_calls_it_a_loss
+    ok = never_calls_it_a_loss("2,450")
+    assert ok(None, ["The $2,450.00 difference is not missing money; it's a pending trade and accrued interest."])
+    assert not ok(None, ["Harbor lost $2,450 of your money."])

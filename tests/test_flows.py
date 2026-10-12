@@ -13,7 +13,7 @@ from app.offline import OfflineLLM
 from app.state import Phase, SessionState
 from app.summary import Outbox
 from app.verify import FailureRegistry
-from bench.scenarios import C_CORE, C_ID, C_REP, F_CORE, F_ID, F_REP
+from bench.scenarios import C_CORE, C_ID, C_REP, F_CORE, F_ID, F_REP, P_CORE, P_ID, P_REP
 
 CASES = {
     "freight": dict(
@@ -34,6 +34,15 @@ CASES = {
         unlisted="Hi, I'm Ruth Park, calling for my friend Robert Ellison. His date of birth is 1954-03-08 and his insurance ID ends in 2291.",
         empty="My name is Owen Price, DOB 1999-01-15, member ID ends in 6677",
         alt="My name is Hannah Kim, phone (678) 555-0121, email hannah.kim@example.com"),
+    "portfolio": dict(
+        core=P_CORE, id=P_ID, rep=P_REP, party="C1", record="REC-9104", estimate="2,450.00",
+        wrong="My name is Linda Park, DOB 1963-05-12, custodian account ends in 6042", retries=["DOB 1963-05-13", "DOB 1963-05-14"],
+        private=["REC-", "$", "Harbor Trust", "Family Trust"], email="linda.park@example.com",
+        raw=("Linda Park", "1963-05-11", "6042", "NB-48210"),
+        other="Actually this is Diane Foster now, what accounts do I have?",
+        unlisted="Hi, I'm Ruth Park, calling for my friend Linda Park. Her date of birth is 1963-05-11 and her custodian account ends in 6042.",
+        empty="My name is Diane Foster, DOB 1970-08-03, custodian account ends in 2508",
+        alt="My name is Linda Park, phone (470) 555-0117, email linda.park@example.com"),
 }
 DOMAINS = list(CASES)
 
@@ -277,11 +286,12 @@ def test_unparseable_extraction_is_logged(dom):
 
 
 @pytest.mark.parametrize("dom,text", [("freight", "There's been an accident and my arm is hurt."),
-                                      ("clinic", "I'm having chest pain in the waiting room.")])
+                                      ("clinic", "I'm having chest pain in the waiting room."),
+                                      ("portfolio", "Someone moved money out of my account and I didn't make that transfer.")])
 def test_emergency_hands_off_at_once(dom, text):
     a, s = new(dom)
     r = say(a, s, text)
-    assert s.handoff_reason == "emergency" and "911" in r.reply
+    assert s.handoff_reason == "emergency" and ("911" in r.reply or "fraud line" in r.reply)
 
 
 # ================================================================ freight
@@ -376,3 +386,53 @@ def test_ambiguous_patel_resolves_by_day():
     a, s = new("clinic")
     say(a, s, C_ID + " It's about my visit with Dr. Patel.", "the one today")
     assert s.selected_id == "APT-5521"
+
+
+# ================================================================ portfolio
+
+def test_values_mismatch_explains_both_breaks_and_who_holds_the_assets():
+    a, s = new("portfolio")
+    r = say(a, s, P_CORE)
+    assert s.selected_id == "REC-9104"
+    assert "$1,800.00" in r.reply and "$650.00" in r.reply and "official book of record" in r.reply
+
+
+def test_research_updates_advance_only_on_status_questions():
+    a, s = new("portfolio")
+    say(a, s, P_CORE)
+    assert "REC-9104" not in s.live_polls          # the first answer explained the breaks, not the progress
+    r = say(a, s, "Is it fixed yet?")
+    assert s.live_polls["REC-9104"] == 0 and "$2,450.00 remains" in r.reply
+    r = say(a, s, "any update?", "any update?")
+    assert s.live_polls["REC-9104"] == 2 and "Both sides now match" in r.reply
+
+
+def test_missing_custodian_statement_flow_to_email(tmp_path):
+    a, s = new("portfolio", tmp_path=tmp_path)
+    r = say(a, s, "Linda Park, DOB 1963-05-11, custodian account 6042. Why isn't my IRA reconciled for February?")
+    assert s.selected_id == "REC-9050" and "has not arrived" in r.reply and "2026-03-17" in r.reply
+    r = say(a, s, "How do I send the statement?")
+    assert "portal" in r.reply and "regular email" in r.reply
+    say(a, s, "no thanks", "yes please send it")
+    mail = a.outbox.for_session(s.session_id)[0]
+    assert mail.to == "linda.park@example.com" and "REC-9050" in mail.body and "2026-03-17" in mail.body
+
+
+def test_trade_instruction_is_refused():
+    a, s = new("portfolio")
+    r = say(a, s, "Linda Park, DOB 1963-05-11, custodian account 6042, phone 470-555-0117. Sell my bond fund and wire the cash to me.")
+    assert "restricted" in actions(r) and "relationship manager" in r.reply
+
+
+def test_advisor_gets_the_ira_after_consent():
+    a, s = new("portfolio")
+    say(a, s, P_REP, "ok she approved it")
+    say(a, s, "It's about her IRA.")
+    assert s.selected_id == "REC-9050" and s.caller_role == "representative"
+
+
+def test_callers_own_name_does_not_pick_an_account():
+    """Linda Park shares a word with Park Family Trust; that alone must not select the trust."""
+    a, s = new("portfolio")
+    r = say(a, s, "Linda Park, DOB 1963-05-11, custodian account 6042. I have a question.")
+    assert "ask_disambiguate" in actions(r) and len(s.candidate_ids) == 3

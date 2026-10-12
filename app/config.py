@@ -27,7 +27,7 @@ class Settings:
     max_party_failures: int = field(default_factory=lambda: int(_env("MAX_PARTY_FAILURES", "5")))
     lockout_window_min: int = field(default_factory=lambda: int(_env("LOCKOUT_WINDOW_MIN", "30")))
 
-    # freight or clinic
+    # freight, clinic, or portfolio
     domain: str = field(default_factory=lambda: _env("DOMAIN", "freight"))
     llm_provider: str = field(default_factory=lambda: _env("LLM_PROVIDER", "sglang"))
     base_url: str = field(default_factory=lambda: _env("SGLANG_BASE_URL", "http://localhost:30000/v1"))

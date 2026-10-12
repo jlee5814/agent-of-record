@@ -14,8 +14,8 @@ CATEGORY_WORDS = {"sick_visit": "sick visit", "follow_up": "follow up visit", "p
 
 class Clinic(Domain):
     key = "clinic"
-    org = "Ankle and Foot Clinic front desk"
-    opening = ("Thanks for contacting Ankle and Foot Clinic. I can help with your visit, the wait, or a bill. "
+    org = "AF Clinic front desk"
+    opening = ("Thanks for contacting AF Clinic. I can help with your visit, the wait, or a bill. "
                "How can I help?")
     record_noun = "visit"
     id_prefix = "APT"

@@ -18,7 +18,7 @@ The records, the banks, and every person in the data are made up.
 
 **Freight.** A driver calls AKT from a dock. How much longer until I get a door? Am I getting detention for this? Why did you dock $180 from my pay?
 
-**Clinic.** A patient messages Ankle and Foot Clinic from the waiting room. When's the doctor coming? Am I next? Why do I owe $60?
+**Clinic.** A patient messages AF Clinic from the waiting room. When's the doctor coming? Am I next? Why do I owe $60?
 
 **Portfolio.** A client of EP Capital asks why yesterday's value for their trust account doesn't match their Harbor Trust Bank statement. Is my money missing? When will it match?
 

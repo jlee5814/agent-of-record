@@ -15,8 +15,8 @@ CATEGORY_WORDS = {"reefer": "reefer", "dry_van": "dry van", "flatbed": "flatbed"
 
 class Freight(Domain):
     key = "freight"
-    org = "Redline Freight driver support"
-    opening = ("Thanks for calling Redline Freight driver support. I can help with a load, a wait at the dock, "
+    org = "AKT driver support"
+    opening = ("Thanks for calling AKT driver support. I can help with a load, a wait at the dock, "
                "detention, or your settlement. How can I help?")
     record_noun = "load"
     id_prefix = "LD"
@@ -24,7 +24,7 @@ class Freight(Domain):
     id_last4_label = "last four digits of your CDL number"
     account_label = "driver ID"
     account_example = "DRV-2201"
-    consent_channel = "the Redline driver app"
+    consent_channel = "the AKT driver app"
     team = "a dispatcher"
     privacy_reason = "Load and pay details are private to the driver"
     categories = {"reefer": "refrigerated trailer", "dry_van": "dry van", "flatbed": "flatbed"}

@@ -17,21 +17,21 @@ from ..domain import Domain
 CATEGORY_WORDS = {"balanced": "balanced", "core_fixed_income": "core fixed income",
                   "large_cap_equity": "large cap equity"}
 LIVE_WORDS = {"under_research": "under research", "partially_matched": "partially matched", "matched": "matched"}
-MANAGER = "Northbridge"
+MANAGER = "EP Capital"
 
 
 class Portfolio(Domain):
     key = "portfolio"
-    org = "Northbridge Capital client service"
-    opening = ("Thanks for contacting Northbridge Capital client service. I can help with your account values and how "
+    org = "EP Capital client service"
+    opening = ("Thanks for contacting EP Capital client service. I can help with your account values and how "
                "they reconcile with your custodian. How can I help?")
     record_noun = "reconciliation"
     id_prefix = "REC"
     person_noun = "client"
     id_last4_label = "last four digits of your custodian account number"
-    account_label = "Northbridge account number"
-    account_example = "NB-48210"
-    consent_channel = "the Northbridge client portal"
+    account_label = "EP Capital account number"
+    account_example = "EP-48210"
+    consent_channel = "the EP Capital client portal"
     team = "your relationship manager"
     privacy_reason = "Account values and holdings are private financial information"
     categories = {"balanced": "balanced account", "core_fixed_income": "bond account",
@@ -40,7 +40,7 @@ class Portfolio(Domain):
     status_words = {"open_breaks": "open breaks", "awaiting_statement": "waiting on the custodian statement",
                     "matched": "matched", "resolved": "resolved and matched", **LIVE_WORDS}
     intents = {
-        "difference_question": "why Northbridge's value and the custodian's value differ, or what a break is",
+        "difference_question": "why EP Capital's value and the custodian's value differ, or what a break is",
         "status_update": "whether the difference is fixed yet, or the latest progress",
         "value_question": "the account's market value",
         "document_submission": "sending documents such as a custodian statement",
@@ -48,7 +48,7 @@ class Portfolio(Domain):
     }
     live_intents = {"status_update"}
     summary_sections = ["values", "breaks"]
-    money_rule = ("A difference between Northbridge's value and the custodian's value is a reconciliation break to "
+    money_rule = ("A difference between EP Capital's value and the custodian's value is a reconciliation break to "
                   "explain, not a loss, a gain, or money owed to or from the client. The custodian holds the assets and "
                   "its records are the official book of record. Never promise when a break will clear, and never say "
                   "which side is right beyond what the record says.")
@@ -64,10 +64,10 @@ class Portfolio(Domain):
     emergency_reply = ("If you think there's unauthorized activity, call the fraud line on your custodian statement now. "
                        "I'm connecting you to your relationship manager right away.")
     in_scope_words = (r"account|portfolio|value|market|custodian|statement|reconcil\w*|break\w*|differ\w*|match\w*|"
-                      r"trust|ira|harbor|summit|northbridge|holding\w*|trade\w*|settle\w*|interest|accru\w*|bond|"
+                      r"trust|ira|harbor|summit|capital|holding\w*|trade\w*|settle\w*|interest|accru\w*|bond|"
                       r"stock|price\w*|split|advisor|off|gap|report|fixed|update|resolved|yet|credit\w*|lost|refund\w*")
     examples = [
-        ("Values don't match", "Hi, this is Linda Park, account NB-48210, DOB 5/11/1963, custodian account ends in 6042. "
+        ("Values don't match", "Hi, this is Linda Park, account EP-48210, DOB 5/11/1963, custodian account ends in 6042. "
                                "Yesterday's value for my trust account doesn't match my Harbor statement. Why?"),
         ("Is it fixed yet", "Linda Park, born 1963-05-11, custodian account last four 6042. Is the difference on my "
                             "trust account fixed yet?"),

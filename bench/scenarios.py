@@ -304,7 +304,7 @@ def never_calls_it_a_loss(amount: str) -> Check:
 
 
 P_ID = "Linda Park, DOB 1963-05-11, custodian account ends in 6042."
-P_CORE = ("Hi, this is Linda Park, account NB-48210, DOB 5/11/1963, custodian account ends in 6042. Yesterday's "
+P_CORE = ("Hi, this is Linda Park, account EP-48210, DOB 5/11/1963, custodian account ends in 6042. Yesterday's "
           "value for my trust account doesn't match my Harbor statement. Why?")
 P_REP = ("Hi, I'm Michael Chen, calling for my client Linda Park. Her date of birth is 1963-05-11 and her "
          "custodian account ends in 6042.")

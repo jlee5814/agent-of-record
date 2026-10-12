@@ -18,7 +18,7 @@
    "appointment_time": "08:00", "check_in_time": "07:45", "free_time_hours": 2, "detention_rate": "50.00",
    "detention": {"status": "denied", "reason": "the receiver's out time was missing from the bill of lading, so the wait could not be verified"},
    "settlement": {"gross": "1420.00", "net": "940.00", "deductions": [
-     {"label": "lumper fee", "amount": "180.00", "reason": "Redline paid the lumper crew at the receiver and no lumper receipt was turned in"},
+     {"label": "lumper fee", "amount": "180.00", "reason": "AKT paid the lumper crew at the receiver and no lumper receipt was turned in"},
      {"label": "fuel advance", "amount": "300.00", "reason": "you took a fuel advance on 2026-03-02"}
    ]},
    "documents_needed": ["lumper receipt"], "deadline": "2026-03-17", "live": []},

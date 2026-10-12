@@ -1,5 +1,5 @@
 {
-  "default_guidance": "Upload documents through the secure message center in the Northbridge client portal. Never send account statements by regular email.",
+  "default_guidance": "Upload documents through the secure message center in the EP Capital client portal. Never send account statements by regular email.",
   "category_guidance": {
     "core_fixed_income": "For bond accounts, accrued interest and pricing vendors cause most differences.",
     "balanced": "For balanced accounts, trades that haven't settled cause most short lived differences."
@@ -9,7 +9,7 @@
   },
   "document_alternatives": {
     "default": "If you don't have the document, your relationship manager can request it from the custodian with your written authorization.",
-    "custodian statement for the missing period": "If you can't download the statement, ask the custodian to send it to Northbridge directly, or sign the authorization in the portal so operations can request it for you."
+    "custodian statement for the missing period": "If you can't download the statement, ask the custodian to send it to EP Capital directly, or sign the authorization in the portal so operations can request it for you."
   },
   "followup_settings": {
     "processing_time": "two business days",
@@ -18,7 +18,7 @@
   "followup_rules": [
     {"topic": "missing_document_alternatives", "requires_documents": true,
      "match_any": ["don't have", "do not have", "can't find", "can't download", "lost", "no access"],
-     "text": "If you can't get {documents}, the custodian can send it to Northbridge directly, or you can sign the authorization in the portal for reconciliation {record_id}."},
+     "text": "If you can't get {documents}, the custodian can send it to EP Capital directly, or you can sign the authorization in the portal for reconciliation {record_id}."},
     {"topic": "submission_timing", "requires_documents": true,
      "match_any": ["how soon", "when do i", "when should", "deadline", "by when", "how long do i have"],
      "text": "Please send {documents} for reconciliation {record_id} before the deadline, so the month end report isn't delayed."},

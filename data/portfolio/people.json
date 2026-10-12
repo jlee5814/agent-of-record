@@ -1,14 +1,14 @@
 [
-  {"party_id": "C1", "name": "Linda Park", "name_aliases": [], "account_number": "NB-48210",
+  {"party_id": "C1", "name": "Linda Park", "name_aliases": [], "account_number": "EP-48210",
    "dob": "1963-05-11", "id_last4": "6042", "phone": "+14705550117", "phone_aliases": [],
    "email": "linda.park@example.com", "email_aliases": []},
-  {"party_id": "C2", "name": "Thomas Reed", "name_aliases": ["Tom Reed"], "account_number": "NB-51377",
+  {"party_id": "C2", "name": "Thomas Reed", "name_aliases": ["Tom Reed"], "account_number": "EP-51377",
    "dob": "1958-11-30", "id_last4": "1189", "phone": "+14705550152", "phone_aliases": [],
    "email": "t.reed@example.net", "email_aliases": []},
-  {"party_id": "C3", "name": "Oluwaseun Adeyemi", "name_aliases": ["Seun Adeyemi"], "account_number": "NB-60924",
+  {"party_id": "C3", "name": "Oluwaseun Adeyemi", "name_aliases": ["Seun Adeyemi"], "account_number": "EP-60924",
    "dob": "1977-02-14", "id_last4": "7735", "phone": "+14705550118", "phone_aliases": [],
    "email": "seun.adeyemi@example.org", "email_aliases": ["o.adeyemi@example.org"]},
-  {"party_id": "C4", "name": "Diane Foster", "name_aliases": [], "account_number": "NB-70031",
+  {"party_id": "C4", "name": "Diane Foster", "name_aliases": [], "account_number": "EP-70031",
    "dob": "1970-08-03", "id_last4": "2508", "phone": "+14705550199", "phone_aliases": [],
    "email": "diane.foster@example.com", "email_aliases": []}
 ]

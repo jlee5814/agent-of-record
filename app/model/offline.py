@@ -36,7 +36,7 @@ def heuristic_extract(text: str, phase: str, last_agent: str, domain, today: dat
 
     # ---- identity
     out["email"] = _first(r"([\w.+-]+@[\w-]+\.[\w.]+)", t)
-    out["account_number"] = _first(r"\b((?:DRV|MRN)-?\s?\d{4,})\b", t, re.I)
+    out["account_number"] = _first(r"\b((?:DRV|MRN|EP)-?\s?\d{4,})\b", t, re.I)
     iso = _first(r"\b((?:19|20)\d{2}-\d{2}-\d{2})\b", t)
     slash = _first(r"\b(\d{1,2}/\d{1,2}/(?:19|20)\d{2})\b", t)
     words = _first(r"\b((?:%s)\s+\d{1,2}(?:st|nd|rd|th)?,?\s+(?:19|20)\d{2})\b" % "|".join(

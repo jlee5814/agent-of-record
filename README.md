@@ -12,15 +12,15 @@ So I built an agent that checks every reply against the record before the caller
 
 A local Qwen3-8B, served by SGLang on Apple Silicon through its MLX backend, reads the caller's words and writes the reply. Code decides everything else: who the caller is, which record they mean, and what may be said. Then a guard reconciles the reply against the record. Every amount, time, and ID must match, or the reply is replaced. The model is the working copy; the record is the book of record.
 
-The carrier, the clinic, the investment manager, the banks, and every person in the data are made up.
+The records, the banks, and every person in the data are made up.
 
 ## The three desks
 
-**Freight.** A driver calls Redline Freight from a dock. How much longer until I get a door? Am I getting detention for this? Why did you dock $180 from my pay?
+**Freight.** A driver calls AKT from a dock. How much longer until I get a door? Am I getting detention for this? Why did you dock $180 from my pay?
 
-**Clinic.** A patient messages Maple Grove Family Clinic from the waiting room. When's the doctor coming? Am I next? Why do I owe $60?
+**Clinic.** A patient messages Ankle and Foot Clinic from the waiting room. When's the doctor coming? Am I next? Why do I owe $60?
 
-**Portfolio.** A client of Northbridge Capital asks why yesterday's value for their trust account doesn't match the statement from Harbor Trust Bank. The bank is the custodian: it holds the client's money and keeps the official book of record. The manager keeps its own book for trading and reporting, and portfolio operations reconciles the two every day. A gap is a break to explain, such as a trade the manager books on trade date and the custodian on settlement date, interest one side accrues daily and the other posts on the coupon date, or two pricing vendors for the same bond. It is never money gone missing.
+**Portfolio.** A client of EP Capital asks why yesterday's value for their trust account doesn't match their Harbor Trust Bank statement. Is my money missing? When will it match?
 
 I picked these because I've worked all three. They look different but share a shape: a private record, money that's easy to promise or misstate by accident, and a status that keeps changing while the person is still asking. Same engine, three domains. A new domain is one Python file and one data folder.
 
@@ -51,7 +51,7 @@ The code lives in two packages with one seam between them.
 
 ## What code decides, not the model
 
-- **Verification.** Three of five details (name, date of birth, phone, email, and the last four of a CDL, an insurance member ID, or a custodian account) must match one person, with nothing contradicting the record. The driver ID, patient number, or Northbridge account number helps find the record but doesn't count. A miss never says which detail was wrong.
+- **Verification.** Three of five details (name, date of birth, phone, email, and the last four of a CDL, an insurance member ID, or a custodian account) must match one person, with nothing contradicting the record. The driver ID, patient number, or EP Capital account number helps find the record but doesn't count. A miss never says which detail was wrong.
 - **Lockout.** Three misses end the chat. Five misses against one person within thirty minutes lock that person out of self service across every session.
 - **Someone calling for them.** A spouse calling for a driver, a daughter for her father, or an advisor for a client must be on file, and the account holder must approve a request in their app or portal. The caller's word is never consent.
 - **A new speaker.** If someone new speaks after verification, the gate relocks and both model calls lose sight of everything said before.

@@ -15,13 +15,13 @@
     "type": "pending trade",
     "amount": "1800.00",
     "state": "open",
-    "detail": "a purchase traded on 2026-03-09 that settles on 2026-03-10; Northbridge records it on the trade date and the custodian on the settlement date"
+    "detail": "a purchase traded on 2026-03-09 that settles on 2026-03-10; EP Capital records it on the trade date and the custodian on the settlement date"
    },
    {
     "type": "accrued interest",
     "amount": "650.00",
     "state": "open",
-    "detail": "interest earned on a Treasury note that Northbridge accrues daily and the custodian posts on the coupon date"
+    "detail": "interest earned on a Treasury note that EP Capital accrues daily and the custodian posts on the coupon date"
    }
   ],
   "documents_needed": [],
@@ -94,7 +94,7 @@
     "type": "corporate action",
     "amount": "12300.00",
     "state": "resolved",
-    "detail": "a two for one stock split the custodian processed one day after Northbridge did; it cleared on 2026-03-10"
+    "detail": "a two for one stock split the custodian processed one day after EP Capital did; it cleared on 2026-03-10"
    }
   ],
   "documents_needed": [],
@@ -117,7 +117,7 @@
     "type": "pricing source",
     "amount": "3180.00",
     "state": "open",
-    "detail": "Northbridge and the custodian price one municipal bond from different vendors; it is a valuation difference, not a change in the holdings"
+    "detail": "EP Capital and the custodian price one municipal bond from different vendors; it is a valuation difference, not a change in the holdings"
    }
   ],
   "documents_needed": [],

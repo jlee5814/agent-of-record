@@ -1,5 +1,5 @@
 {
-  "default_guidance": "Send paperwork through the Redline driver app under Loads, or take a clear photo and email it to settlements. Every page should show the load number, the facility, and the date.",
+  "default_guidance": "Send paperwork through the AKT driver app under Loads, or take a clear photo and email it to settlements. Every page should show the load number, the facility, and the date.",
   "category_guidance": {
     "reefer": "For reefer loads, include the temperature printout if the shipper gave you one.",
     "flatbed": "For flatbed loads, note any tarping or securement delays on the bill of lading."
@@ -29,7 +29,7 @@
      "text": "Approved paperwork is paid on {processing_time}."},
     {"topic": "submission_method", "requires_documents": true,
      "match_any": ["how do i send", "where do i send", "upload", "the app", "email it", "scan"],
-     "text": "Upload {documents} in the Redline driver app under Loads, or email a clear photo to settlements."},
+     "text": "Upload {documents} in the AKT driver app under Loads, or email a clear photo to settlements."},
     {"topic": "file_format", "requires_documents": true,
      "match_any": ["photo", "picture", "pdf", "blurry", "format"],
      "text": "A clear photo or a PDF works, as long as the load number, the date, and any signatures are readable."}

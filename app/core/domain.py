@@ -17,7 +17,7 @@ from .state import SessionState
 
 class Domain:
     key = ""
-    org = ""                       # Redline Freight driver support
+    org = ""                       # AKT driver support
     opening = ""
     record_noun = "record"         # load, visit
     id_prefix = ""                 # LD, APT
@@ -25,7 +25,7 @@ class Domain:
     id_last4_label = ""            # last four digits of your CDL number
     account_label = ""             # driver ID, patient number
     account_example = ""
-    consent_channel = ""           # the Redline driver app
+    consent_channel = ""           # the AKT driver app
     team = "a person"              # who a handoff goes to
     privacy_reason = ""            # why verification comes first, in one clause
     categories: dict[str, str] = {}
